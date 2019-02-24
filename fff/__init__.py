@@ -81,19 +81,17 @@ class Partition(object):
     def is_extended(self):
         return self.partition_type in EXTENDED_PARTITION_TYPES
 
+    @property
+    def description(self):
+        default = 'Extended Partition' if self.is_extended else 'Partition'
+        return '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, default),
+                                hex(self.partition_type))
+
     def tabulate(self):
-        if self.is_extended:
-            return [[self.sector_offset,
-                     self.sector_offset + self.total_sector,
-                     self.total_sector,
-                     '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, 'Extended Partition'),
-                                      hex(self.partition_type))]] + self.ebr.tabulate()
-        else:
-            return [[self.sector_offset,
-                     self.sector_offset + self.total_sector,
-                     self.total_sector,
-                     '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, 'Partition'),
-                                      hex(self.partition_type))]]
+        return [[self.sector_offset,
+                 self.sector_offset + self.total_sector,
+                 self.total_sector,
+                 self.description]] + (self.ebr.tabulate() if self.is_extended else [])
 
 
 class MBR(object):
@@ -124,8 +122,13 @@ class MBR(object):
         for p in [p for p in self.partitions if p.is_extended]:
             p.ebr = MBR(disk, parent=p)
 
+    @property
+    def description(self):
+        return 'EBR' if self.parent else 'MBR'
+
     def tabulate(self):
-        return [[self.sector_offset, self.sector_offset, 1, 'MBR/EBR']] + [i for p in self.partitions for i in p.tabulate()]
+        return ([[self.sector_offset, self.sector_offset, 1, self.description]] +
+                [i for p in self.partitions for i in p.tabulate()])
 
     def __str__(self):
         return tabulate(self.tabulate(), headers=['Start', 'End', 'Length', 'Description'])
