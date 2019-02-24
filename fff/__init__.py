@@ -3,10 +3,49 @@ from tabulate import tabulate
 import struct
 
 
-EXTENDED_PARTITION_TYPES = {
+EXTENDED_PARTITION_TYPES = set([0x05, 0x0F])
+
+# https://www.win.tue.nl/~aeb/partitions/partition_types-1.html
+PARTITION_TYPES = {
+    0x00: 'Unused Partition Table Entry',
+    0x01: 'DOS 12-bit FAT',
+
+    0x04: '04 DOS 3.0+ 16-bit FAT (up to 32M)',
     0x05: 'DOS 3.3+ Extended Partition',
+    0x06: '06 DOS 3.31+ 16-bit FAT (over 32M)',
+    0x07: '07 Windows NT NTFS/exFAT/Advanced Unix/QNX2.x pre-1988',
+
+    0x0B: 'WIN95 OSR2 FAT32',
+    0x0C: 'WIN95 OSR2 FAT32, LBA-mapped',
+
+    0x0E: 'WIN95: DOS 16-bit FAT, LBA-mapped',
     0x0F: 'WIN95: Extended partition, LBA-mapped',
+
+    0x82: 'Linux swap',
+    0x83: 'Linux native partition',
+
+    0x85: 'Linux extended partition',
 }
+
+
+class UnallocatedSpace(object):
+    def __init__(self, sector_offset, total_sector):
+        self.sector_offset = sector_offset
+        self.total_sector = total_sector
+
+    @property
+    def last_sector(self):
+        return self.sector_offset + self.total_sector - 1
+
+    @property
+    def is_extended(self):
+        return False
+
+    def tabulate(self):
+        return [[self.sector_offset,
+                 self.sector_offset + self.total_sector,
+                 self.total_sector,
+                 'Unallocated']]
 
 
 class Partition(object):
@@ -31,6 +70,10 @@ class Partition(object):
         return self._sector_offset + parent_offset
 
     @property
+    def last_sector(self):
+        return self.sector_offset + self.total_sector - 1
+
+    @property
     def is_bootable(self):
         return (self.bootable_flag & 0x80) != 0
 
@@ -43,12 +86,14 @@ class Partition(object):
             return [[self.sector_offset,
                      self.sector_offset + self.total_sector,
                      self.total_sector,
-                     'Extended Partition ({})'.format(hex(self.partition_type))]] + self.ebr.tabulate()
+                     '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, 'Extended Partition'),
+                                      hex(self.partition_type))]] + self.ebr.tabulate()
         else:
             return [[self.sector_offset,
                      self.sector_offset + self.total_sector,
                      self.total_sector,
-                     'Partition ({})'.format(hex(self.partition_type))]]
+                     '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, 'Partition'),
+                                      hex(self.partition_type))]]
 
 
 class MBR(object):
@@ -65,12 +110,17 @@ class MBR(object):
 
         assert self.signature == 0xAA55
 
-        self.partitions = [
-            Partition(data[446:462], parent=self),
-            Partition(data[462:478], parent=self),
-            Partition(data[478:494], parent=self),
-            Partition(data[494:510], parent=self),
-        ]
+        self.partitions = [Partition(data[446:462], parent=self)]
+
+        # FIXME: partitions may not be ordered by start offset
+        for start in [462, 478, 494]:
+            curr = Partition(data[start:start+16], parent=self)
+            prev = self.partitions[-1]
+            if curr.sector_offset != prev.last_sector + 1:
+                self.partitions.append(UnallocatedSpace(prev.last_sector + 1,
+                                                        curr.sector_offset - prev.last_sector - 1))
+            self.partitions.append(curr)
+
         for p in [p for p in self.partitions if p.is_extended]:
             p.ebr = MBR(disk, parent=p)
 
