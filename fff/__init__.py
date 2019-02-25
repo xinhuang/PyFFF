@@ -1,4 +1,7 @@
+from . import filesystem
+
 from tabulate import tabulate
+from hexdump import hexdump as hd
 
 import struct
 
@@ -28,6 +31,28 @@ PARTITION_TYPES = {
 }
 
 
+class DiskIO(object):
+    def __init__(self, io, begin, size):
+        self.io = io
+        self._begin = begin
+        self._end = begin + size
+
+        assert self._begin <= self._end
+
+    @property
+    def size(self):
+        return self._end - self._begin
+
+    def seek(self, offset):
+        location = self._begin + offset
+        assert location >= self._begin and location < self._end
+        self.io.seek(location)
+
+    def read(self, size):
+        assert self.io.tell() + size < self._end
+        return self.io.read(size)
+
+
 class UnallocatedSpace(object):
     def __init__(self, sector_offset, total_sector):
         self.sector_offset = sector_offset
@@ -51,6 +76,7 @@ class UnallocatedSpace(object):
 class Partition(object):
     def __init__(self, data, parent=None):
         self.parent = parent
+        self.data = data
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
 
         self.partition_type = struct.unpack('<B', data[4:5])[0]
@@ -87,21 +113,35 @@ class Partition(object):
         return '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, default),
                                 hex(self.partition_type))
 
+    def hexdump(self):
+        return hd(self.data)
+
+    def get_filesystem(self):
+        return filesystem.get_filesystem(self.get_disk_reader())
+
+    def get_disk_reader(self):
+        return DiskIO(self.parent.disk,
+                      self.sector_offset * self.parent.sector_size,
+                      self.total_sector * self.parent.sector_size)
+
     def tabulate(self):
         return [[self.sector_offset,
                  self.sector_offset + self.total_sector,
                  self.total_sector,
                  self.description]] + (self.ebr.tabulate() if self.is_extended else [])
 
+    def __str__(self):
+        return tabulate(self.tabulate(), headers=['Start', 'End', 'Length', 'Description'])
+
 
 class MBR(object):
     def __init__(self, disk, parent=None):
         self.sector_size = 512
+        self.disk = disk
         self.parent = parent
         self.sector_offset = parent.sector_offset if parent else 0
 
-        disk.seek(self.sector_offset * self.sector_size)
-        data = disk.read(512)
+        data = self.read_data()
 
         self.boot_code = struct.unpack('<446B', data[0:446])
         self.signature = struct.unpack('<H', data[510:])[0]
@@ -126,6 +166,15 @@ class MBR(object):
     def description(self):
         return 'EBR' if self.parent else 'MBR'
 
+    def read_data(self):
+        self.disk.seek(self.sector_offset * self.sector_size)
+        data = self.disk.read(512)
+        return data
+
+    def hexdump(self):
+        data = self.read_data()
+        return hd(data)
+
     def tabulate(self):
         return ([[self.sector_offset, self.sector_offset, 1, self.description]] +
                 [i for p in self.partitions for i in p.tabulate()])
@@ -137,5 +186,8 @@ class MBR(object):
 class DiskImage(object):
     def __init__(self, filepath):
         self.filepath = filepath
-        with open(filepath, 'rb') as disk:
-            self.volume = MBR(disk)
+        self._file = open(filepath, 'rb')
+        self.volume = MBR(self._file)
+
+    def close(self):
+        self._file.close()
