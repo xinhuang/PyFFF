@@ -1,23 +1,26 @@
 
 # Table of Contents
 
-1.  [Prototype](#orgfdaa490)
+1.  [Prototype](#orgf8dd5f8)
 
 
 
-<a id="orgfdaa490"></a>
+<a id="orgf8dd5f8"></a>
 
 # Prototype
 
     import fff
     
     with fff.DiskImage('disk1.dd', type='raw') as disk:
-        partitions = disk.partitions
-        for p in partitions:
-            print(p)
+        disk.volume.hexdump()
+        print(disk.volume)
     
-        part = [p for p in partitions if p.format == pens.FAT32][0]
+        partitions = disk.volume.partitions
+    
+        part = [p for p in partitions if p.format == fff.FAT32][0]
+        print(part.boot_sector.hexdump())
         print(part.boot_sector)
+    
         print([e for e in part.root_dir.entries if e.is_allocated()])
     
         files = list([e for e in part.root_dir.entries
