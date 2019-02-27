@@ -31,9 +31,9 @@ PARTITION_TYPES = {
 }
 
 
-class DiskIO(object):
-    def __init__(self, io, begin, size):
-        self.io = io
+class DiskView(object):
+    def __init__(self, disk, begin, size):
+        self._disk = disk
         self._begin = begin
         self._end = begin + size
 
@@ -46,15 +46,26 @@ class DiskIO(object):
     def seek(self, offset):
         location = self._begin + offset
         assert location >= self._begin and location < self._end
-        self.io.seek(location)
+        self._disk.seek(location)
 
     def read(self, size):
-        assert self.io.tell() + size < self._end
-        return self.io.read(size)
+        assert self._disk.tell() + size < self._end
+        return self._disk.read(size)
+
+
+class CHS(object):
+    def __init__(self, data):
+        self.h = data[0]
+        self.s = data[1] & 0b00111111
+        self.c = ((data[1] & 0b11000000) << 2) | data[2]
+
+    def __str__(self):
+        return '{}/{}/{}'.format(self.c, self.h, self.s)
 
 
 class UnallocatedSpace(object):
-    def __init__(self, sector_offset, total_sector):
+    def __init__(self, disk, sector_offset, total_sector):
+        self.disk = disk
         self.sector_offset = sector_offset
         self.total_sector = total_sector
 
@@ -81,9 +92,8 @@ class Partition(object):
 
         self.partition_type = struct.unpack('<B', data[4:5])[0]
 
-        # FIXME: get the coorect CHS
-        self.start_chs = struct.unpack('<BH', data[1:4])[0]
-        self.end_chs = struct.unpack('<BH', data[5:8])[0]
+        self.start_chs = CHS(data[1:4])
+        self.end_chs = CHS(data[5:8])
 
         self._sector_offset = struct.unpack('<I', data[8:12])[0]
         self.total_sector = struct.unpack('<I', data[12:16])[0]
@@ -120,18 +130,20 @@ class Partition(object):
         return filesystem.get_filesystem(self.get_disk_reader())
 
     def get_disk_reader(self):
-        return DiskIO(self.parent.disk,
-                      self.sector_offset * self.parent.sector_size,
-                      self.total_sector * self.parent.sector_size)
+        return DiskView(self.parent.disk,
+                        self.sector_offset * self.parent.sector_size,
+                        self.total_sector * self.parent.sector_size)
 
     def tabulate(self):
         return [[self.sector_offset,
                  self.sector_offset + self.total_sector,
                  self.total_sector,
-                 self.description]] + (self.ebr.tabulate() if self.is_extended else [])
+                 self.description,
+                 'CHS {} - {}'.format(self.start_chs, self.end_chs)]] + (self.ebr.tabulate() if self.is_extended else [])
 
     def __str__(self):
-        return tabulate(self.tabulate(), headers=['Start', 'End', 'Length', 'Description'])
+        return tabulate(self.tabulate(),
+                        headers=['Start', 'End', 'Length', 'Description', 'CHS', ])
 
 
 class MBR(object):
@@ -154,13 +166,20 @@ class MBR(object):
         for start in [462, 478, 494]:
             curr = Partition(data[start:start+16], parent=self)
             prev = self.partitions[-1]
-            if curr.sector_offset != prev.last_sector + 1:
-                self.partitions.append(UnallocatedSpace(prev.last_sector + 1,
-                                                        curr.sector_offset - prev.last_sector - 1))
+            if curr.sector_offset > prev.last_sector + 1:
+                first_sector = prev.last_sector + 1
+                nsector = curr.sector_offset - first_sector
+                last_sector = first_sector + nsector - 1
+                print(first_sector * self.sector_size,
+                      nsector * self.sector_size)
+                self.partitions.append(UnallocatedSpace(DiskView(self.disk,
+                                                                 first_sector * self.sector_size,
+                                                                 nsector * self.sector_size),
+                                                        first_sector, last_sector))
             self.partitions.append(curr)
 
         for p in [p for p in self.partitions if p.is_extended]:
-            p.ebr = MBR(disk, parent=p)
+            p.ebr = MBR(self.disk, parent=p)
 
     @property
     def description(self):
@@ -168,6 +187,7 @@ class MBR(object):
 
     def read_data(self):
         self.disk.seek(self.sector_offset * self.sector_size)
+        # self.disk.seek(0)
         data = self.disk.read(512)
         return data
 
