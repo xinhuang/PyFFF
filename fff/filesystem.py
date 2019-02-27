@@ -34,16 +34,19 @@ class FAT(object):
 class FAT12(FAT):
     def __init__(self, disk, data):
         FAT.__init__(self, disk, data)
+        self.type = 'FAT12'
 
 
 class FAT16(FAT):
     def __init__(self, disk, data):
         FAT.__init__(self, disk, data)
+        self.type = 'FAT16'
 
 
 class FAT32(FAT):
     def __init__(self, disk, data):
         FAT.__init__(self, disk, data)
+        self.type = 'FAT32'
 
 
 def get_fat(disk, sector0):
