@@ -140,7 +140,7 @@ class Partition(object):
         return filesystem.get_filesystem(self.get_disk_reader())
 
     def get_disk_reader(self):
-        return DiskView(self.parent.disk,
+        return DiskView(self.parent.dv.disk,
                         self.sector_offset * self.parent.sector_size,
                         self.total_sector * self.parent.sector_size)
 

@@ -2,16 +2,16 @@ import struct
 
 
 class FAT(object):
-    def __init__(self, disk, data):
-        self.jump = data[0:3]
-        self.oem = data[3:11]
+    def __init__(self, disk, sector0):
+        self.jump = sector0[0:3]
+        self.oem = sector0[3:11]
         self.bytes_per_sector = struct.unpack('<H', sector0[11:13])[0]
-        self.sectors_per_cluster = ord(sector0[13])
+        self.sectors_per_cluster = sector0[13]
         self.reserved_size = struct.unpack('<H', sector0[14:16])[0]
-        self.nfats = ord(sector[16])
+        self.nfats = sector0[16]
         self.max_files_in_root = struct.unpack('<H', sector0[17:19])[0]
         self.nsectors16 = struct.unpack('<H', sector0[19:21])[0]
-        self.media_type = ord(sector0[21])
+        self.media_type = sector0[21]
         self.fat_size = struct.unpack('<H', sector0[22:24])[0]
         self.sectors_per_track = struct.unpack('<H', sector0[24:26])[0]
         self.nheads = struct.unpack('<H', sector0[26:28])[0]
