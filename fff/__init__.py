@@ -88,8 +88,9 @@ class UnallocatedSpace(object):
 
 
 class Partition(object):
-    def __init__(self, data, parent=None):
+    def __init__(self, data, number, parent=None):
         self.data = data
+        self.number = number
         self.parent = parent
 
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
@@ -145,11 +146,13 @@ class Partition(object):
                         self.total_sector * self.parent.sector_size)
 
     def tabulate(self):
-        return [[self.sector_offset,
-                 self.sector_offset + self.total_sector,
-                 self.total_sector,
-                 self.description,
-                 'CHS {} - {}'.format(self.start_chs, self.end_chs)]] + (self.ebr.tabulate() if self.is_extended else [])
+        return ([['{}:{}'.format(self.parent.number, self.number),
+                  self.sector_offset,
+                  self.sector_offset + self.total_sector,
+                  self.total_sector,
+                  self.description,
+                  'CHS {} - {}'.format(self.start_chs, self.end_chs)]] +
+                (self.ebr.tabulate() if self.is_extended else []))
 
     def __str__(self):
         return tabulate(self.tabulate(),
@@ -157,7 +160,8 @@ class Partition(object):
 
 
 class MBR(object):
-    def __init__(self, disk_view, parent=None):
+    def __init__(self, disk_view, number=0, parent=None):
+        self.number = number
         self.sector_size = 512
         self.dv = disk_view
         self.parent = parent
@@ -170,29 +174,28 @@ class MBR(object):
 
         assert self.signature == 0xAA55
 
-        self.partitions = [Partition(data[446:462], parent=self)]
+        self.partitions = [Partition(data[446:462], number=0, parent=self),
+                           Partition(data[462:478], number=1, parent=self),
+                           Partition(data[478:494], number=2, parent=self),
+                           Partition(data[494:510], number=3, parent=self), ]
 
-        # FIXME: partitions may not be ordered by start offset
-        for start in [462, 478, 494]:
-            curr = Partition(data[start:start+16], parent=self)
-            prev = self.partitions[-1]
-            if curr.sector_offset > prev.last_sector + 1:
-                first_sector = prev.last_sector + 1
-                nsector = curr.sector_offset - first_sector
-                last_sector = first_sector + nsector - 1
+        # TODO: Unallocated space
+        self.unallocated = []
 
-                dv = DiskView(self.dv.disk, first_sector * self.sector_size,
-                              nsector * self.sector_size)
-                self.partitions.append(UnallocatedSpace(dv, first_sector, last_sector))
-            self.partitions.append(curr)
-
+        n = self.number + 1
         for p in [p for p in self.partitions if p.is_extended]:
             dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
-            p.ebr = MBR(dv, parent=p)
+            p.ebr = MBR(dv, number=n, parent=p)
+            n = p.ebr._max_number
 
     @property
     def description(self):
         return 'EBR' if self.parent else 'MBR'
+
+    @property
+    def _max_number(self):
+        return max([p.ebr.number for p in self.partitions if p.is_extended] +
+                   [self.number])
 
     def read_data(self):
         self.dv.seek(0)
@@ -204,11 +207,13 @@ class MBR(object):
         return hd(data)
 
     def tabulate(self):
-        return ([[self.sector_offset, self.sector_offset, 1, self.description]] +
+        return ([['{}'.format(self.number),
+                  self.sector_offset, self.sector_offset, 1, self.description]] +
                 [i for p in self.partitions for i in p.tabulate()])
 
     def __str__(self):
-        return tabulate(self.tabulate(), headers=['Start', 'End', 'Length', 'Description'])
+        return tabulate(self.tabulate(),
+                        headers=['', 'Start', 'End', 'Length', 'Description'])
 
 
 class DiskImage(object):
