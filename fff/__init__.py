@@ -33,6 +33,8 @@ PARTITION_TYPES = {
 
 class DiskView(object):
     def __init__(self, disk, begin, size):
+        assert not isinstance(disk, DiskView)
+
         self.disk = disk
         self._begin = begin
         self._end = begin + size
@@ -179,7 +181,7 @@ class MBR(object):
                 nsector = curr.sector_offset - first_sector
                 last_sector = first_sector + nsector - 1
 
-                dv = DiskView(self.dv, first_sector * self.sector_size,
+                dv = DiskView(self.dv.disk, first_sector * self.sector_size,
                               nsector * self.sector_size)
                 self.partitions.append(UnallocatedSpace(dv, first_sector, last_sector))
             self.partitions.append(curr)
