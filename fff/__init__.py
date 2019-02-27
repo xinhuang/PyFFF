@@ -33,7 +33,7 @@ PARTITION_TYPES = {
 
 class DiskView(object):
     def __init__(self, disk, begin, size):
-        self._disk = disk
+        self.disk = disk
         self._begin = begin
         self._end = begin + size
 
@@ -45,12 +45,13 @@ class DiskView(object):
 
     def seek(self, offset):
         location = self._begin + offset
+
         assert location >= self._begin and location < self._end
-        self._disk.seek(location)
+        self.disk.seek(location)
 
     def read(self, size):
-        assert self._disk.tell() + size < self._end
-        return self._disk.read(size)
+        assert self.disk.tell() + size < self._end
+        return self.disk.read(size)
 
 
 class CHS(object):
@@ -86,8 +87,9 @@ class UnallocatedSpace(object):
 
 class Partition(object):
     def __init__(self, data, parent=None):
-        self.parent = parent
         self.data = data
+        self.parent = parent
+
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
 
         self.partition_type = struct.unpack('<B', data[4:5])[0]
@@ -97,6 +99,8 @@ class Partition(object):
 
         self._sector_offset = struct.unpack('<I', data[8:12])[0]
         self.total_sector = struct.unpack('<I', data[12:16])[0]
+
+        self.disk = DiskView(parent.dv.disk, self.sector_offset, self.size)
 
         self.ebr = None
 
@@ -108,6 +112,10 @@ class Partition(object):
     @property
     def last_sector(self):
         return self.sector_offset + self.total_sector - 1
+
+    @property
+    def size(self):
+        return self.total_sector * self.parent.sector_size
 
     @property
     def is_bootable(self):
@@ -147,9 +155,9 @@ class Partition(object):
 
 
 class MBR(object):
-    def __init__(self, disk, parent=None):
+    def __init__(self, disk_view, parent=None):
         self.sector_size = 512
-        self.disk = disk
+        self.dv = disk_view
         self.parent = parent
         self.sector_offset = parent.sector_offset if parent else 0
 
@@ -170,25 +178,23 @@ class MBR(object):
                 first_sector = prev.last_sector + 1
                 nsector = curr.sector_offset - first_sector
                 last_sector = first_sector + nsector - 1
-                print(first_sector * self.sector_size,
-                      nsector * self.sector_size)
-                self.partitions.append(UnallocatedSpace(DiskView(self.disk,
-                                                                 first_sector * self.sector_size,
-                                                                 nsector * self.sector_size),
-                                                        first_sector, last_sector))
+
+                dv = DiskView(self.dv, first_sector * self.sector_size,
+                              nsector * self.sector_size)
+                self.partitions.append(UnallocatedSpace(dv, first_sector, last_sector))
             self.partitions.append(curr)
 
         for p in [p for p in self.partitions if p.is_extended]:
-            p.ebr = MBR(self.disk, parent=p)
+            dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
+            p.ebr = MBR(dv, parent=p)
 
     @property
     def description(self):
         return 'EBR' if self.parent else 'MBR'
 
     def read_data(self):
-        self.disk.seek(self.sector_offset * self.sector_size)
-        # self.disk.seek(0)
-        data = self.disk.read(512)
+        self.dv.seek(0)
+        data = self.dv.read(512)
         return data
 
     def hexdump(self):
@@ -207,7 +213,9 @@ class DiskImage(object):
     def __init__(self, filepath):
         self.filepath = filepath
         self._file = open(filepath, 'rb')
-        self.volume = MBR(self._file)
+        self._file.seek(0, 2)
+        dv = DiskView(self._file, 0, self._file.tell())
+        self.volume = MBR(dv)
 
     def close(self):
         self._file.close()
