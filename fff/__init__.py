@@ -102,13 +102,6 @@ class Partition(Entity):
         return '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, default),
                                 hex(self.partition_type))
 
-    @property
-    def _max_index(self):
-        if not self.is_extended:
-            return self.index
-        else:
-            return max([self.ebr._max_index])
-
     def hexdump(self):
         return hd(self.data)
 
@@ -200,10 +193,6 @@ class MBR(object):
                    [self.number])
 
     @property
-    def _max_index(self):
-        return max([p._max_index for p in self.partitions] + [self.index])
-
-    @property
     def entities(self):
         yield self
 
@@ -235,7 +224,8 @@ class MBR(object):
 
         if len(ps) == 0:
             if self.sector_offset < self.last_sector:
-                us = UnallocatedSpace(self.sector_offset + 1, self.last_sector, parent=self)
+                us = UnallocatedSpace(self.sector_offset + 1,
+                                      self.last_sector, parent=self)
                 self.unallocated.append(us)
         else:
             if self.sector_offset + 1 < ps[0].sector_offset:
