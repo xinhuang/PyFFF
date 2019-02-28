@@ -46,40 +46,23 @@ class CHS(object):
         return '{}/{}/{}'.format(self.c, self.h, self.s)
 
 
-class Partition(object):
-    def __init__(self, data, number, parent=None):
+class Partition(Entity):
+    def __init__(self, data, number, parent):
         self.data = data
-        self.index = -1
-        self.number = number
-        self.parent = parent
 
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
-
         self.partition_type = struct.unpack('<B', data[4:5])[0]
 
         self.start_chs = CHS(data[1:4])
         self.end_chs = CHS(data[5:8])
 
-        self._sector_offset = struct.unpack('<I', data[8:12])[0]
-        self.total_sector = struct.unpack('<I', data[12:16])[0]
-
-        self.dv = DiskView(parent.dv.disk, self.sector_offset *
-                           self.parent.sector_size, self.size)
+        sector_offset = struct.unpack('<I', data[8:12])[0] + parent.sector_offset
+        sector_count = struct.unpack('<I', data[12:16])[0]
+        last_sector = sector_offset + sector_count - 1
+        Entity.__init__(self, parent.dv.disk, sector_offset, last_sector,
+                        parent.sector_size, number, parent)
 
         self.ebr = None
-
-    @property
-    def sector_size(self):
-        return self.parent.sector_size
-
-    @property
-    def sector_offset(self):
-        parent_offset = self.parent.sector_offset if self.parent else 0
-        return self._sector_offset + parent_offset
-
-    @property
-    def last_sector(self):
-        return self.sector_offset + self.total_sector - 1
 
     @property
     def sectors(self):
@@ -98,10 +81,6 @@ class Partition(object):
                     return self.partition.read(s.start * sector_size,
                                                n * sector_size)
         return SectorContainer(self)
-
-    @property
-    def size(self):
-        return self.total_sector * self.parent.sector_size
 
     @property
     def is_bootable(self):
@@ -151,7 +130,7 @@ class Partition(object):
                  '{}:{}'.format(self.parent.number, self.number),
                  self.sector_offset,
                  self.last_sector if not self.is_unallocated else '-',
-                 self.total_sector,
+                 self.sector_count,
                  self.description,
                  'CHS {} - {}'.format(self.start_chs, self.end_chs)]]
 
@@ -164,12 +143,13 @@ class Partition(object):
 
 class MBR(object):
     def __init__(self, disk_view, number=0, parent=None):
-        self.index = -1 if parent else 0
+        self.sector_offset = parent.sector_offset if parent else 0
         self.number = number
         self.sector_size = 512
         self.dv = disk_view
         self.parent = parent
-        self.sector_offset = parent.sector_offset if parent else 0
+        self.index = -1 if parent else 0
+
         self.unallocated = []
         self.unused_entries = []
 
