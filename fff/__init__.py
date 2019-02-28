@@ -55,6 +55,12 @@ class DiskView(object):
         assert self.disk.tell() + size < self._end
         return self.disk.read(size)
 
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return '<DiskView {} {}>'.format(self._begin, self.size)
+
 
 class CHS(object):
     def __init__(self, data):
@@ -68,7 +74,7 @@ class CHS(object):
 
 class UnallocatedSpace(object):
     def __init__(self, disk, sector_offset, total_sector):
-        self.disk = disk
+        self.dv = disk
         self.sector_offset = sector_offset
         self.total_sector = total_sector
 
@@ -103,9 +109,14 @@ class Partition(object):
         self._sector_offset = struct.unpack('<I', data[8:12])[0]
         self.total_sector = struct.unpack('<I', data[12:16])[0]
 
-        self.disk = DiskView(parent.dv.disk, self.sector_offset, self.size)
+        self.dv = DiskView(parent.dv.disk, self.sector_offset *
+                           self.parent.sector_size, self.size)
 
         self.ebr = None
+
+    @property
+    def sector_size(self):
+        return self.parent.sector_size
 
     @property
     def sector_offset(self):
@@ -115,6 +126,24 @@ class Partition(object):
     @property
     def last_sector(self):
         return self.sector_offset + self.total_sector - 1
+
+    @property
+    def sectors(self):
+        class SectorContainer(object):
+            def __init__(self, partition):
+                self.partition = partition
+
+            def __getitem__(self, index_or_slice):
+                sector_size = self.partition.sector_size
+                if isinstance(index_or_slice, int):
+                    index = index_or_slice
+                    return self.partition.read(index, sector_size)
+                elif isinstance(index_or_slice, slice):
+                    s = index_or_slice
+                    n = s.stop - s.start
+                    return self.partition.read(s.start * sector_size,
+                                               n * sector_size)
+        return SectorContainer(self)
 
     @property
     def size(self):
@@ -137,13 +166,16 @@ class Partition(object):
     def hexdump(self):
         return hd(self.data)
 
-    def get_filesystem(self):
-        return filesystem.get_filesystem(self.get_disk_reader())
+    @property
+    def filesystem(self):
+        return filesystem.get_filesystem(self.dv)
 
-    def get_disk_reader(self):
-        return DiskView(self.parent.dv.disk,
-                        self.sector_offset * self.parent.sector_size,
-                        self.total_sector * self.parent.sector_size)
+    def read(self, offset, size):
+        self.dv.seek(offset)
+        return self.dv.read(size)
+
+    def get_partition(self, i):
+        pass
 
     def tabulate(self):
         return ([['{}:{}'.format(self.parent.number, self.number),
@@ -157,6 +189,14 @@ class Partition(object):
     def __str__(self):
         return tabulate(self.tabulate(),
                         headers=['Start', 'End', 'Length', 'Description', 'CHS', ])
+
+
+class PartitionContainer(object):
+    def __init__(self, parent):
+        self.parent = parent
+
+    def __getitem__(self, i):
+        self.parent.get_partition(i)
 
 
 class MBR(object):
@@ -201,6 +241,9 @@ class MBR(object):
         self.dv.seek(0)
         data = self.dv.read(512)
         return data
+
+    def get_partition(self, i):
+        pass
 
     def hexdump(self):
         data = self.read_data()
