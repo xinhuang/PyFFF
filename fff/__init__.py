@@ -213,6 +213,10 @@ class Partition(object):
         return self.partition_type in EXTENDED_PARTITION_TYPES
 
     @property
+    def is_unallocated(self):
+        return self.partition_type == 0x00
+
+    @property
     def description(self):
         default = 'Extended Partition' if self.is_extended else 'Partition'
         return '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, default),
@@ -247,7 +251,7 @@ class Partition(object):
         return [[self.index,
                  '{}:{}'.format(self.parent.number, self.number),
                  self.sector_offset,
-                 self.sector_offset + self.total_sector,
+                 self.last_sector if not self.is_unallocated else '-',
                  self.total_sector,
                  self.description,
                  'CHS {} - {}'.format(self.start_chs, self.end_chs)]]
@@ -255,7 +259,8 @@ class Partition(object):
     def __str__(self):
         rows = reduce(operator.add, [e.tabulate() for e in self.entities])
         return tabulate(rows,
-                        headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description', 'CHS', ])
+                        headers=['#', 'Slot', 'Start', 'End', 'Length',
+                                 'Description', 'CHS', ])
 
 
 class MBR(object):
@@ -349,11 +354,12 @@ class MBR(object):
 
         if len(ps) == 0:
             if self.sector_offset < self.last_sector:
-                us = UnallocatedSpace(self.sector_offset+1, self.last_sector, parent=self)
+                us = UnallocatedSpace(self.sector_offset + 1, self.last_sector, parent=self)
                 self.unallocated.append(us)
         else:
             if self.sector_offset + 1 < ps[0].sector_offset:
-                us = UnallocatedSpace(self.sector_offset+1, ps[0].sector_offset,
+                us = UnallocatedSpace(self.sector_offset + 1,
+                                      ps[0].sector_offset - 1,
                                       parent=self)
                 self.unallocated.append(us)
 
@@ -361,12 +367,13 @@ class MBR(object):
                 prev = ps[i - 1]
                 curr = ps[i]
                 if prev.last_sector + 1 < curr.sector_offset:
-                    us = UnallocatedSpace(prev.last_sector+1, curr.sector_offset,
+                    us = UnallocatedSpace(prev.last_sector + 1,
+                                          curr.sector_offset - 1,
                                           parent=self)
                     self.unallocated.append(us)
 
             if ps[-1].last_sector < self.last_sector:
-                us = UnallocatedSpace(ps[-1].last_sector+1,
+                us = UnallocatedSpace(ps[-1].last_sector + 1,
                                       self.last_sector, parent=self)
                 self.unallocated.append(us)
 
