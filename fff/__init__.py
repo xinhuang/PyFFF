@@ -54,7 +54,7 @@ class DiskView(object):
         self.disk.seek(location)
 
     def read(self, size):
-        assert self.disk.tell() + size < self._end
+        assert self.disk.tell() + size - 1 < self._end
         return self.disk.read(size)
 
     def __repr__(self):
@@ -74,40 +74,83 @@ class CHS(object):
         return '{}/{}/{}'.format(self.c, self.h, self.s)
 
 
-class UnallocatedSpace(object):
-    def __init__(self, sector_offset, end_sector, parent):
-        begin = sector_offset*parent.sector_size
-        end = end_sector*parent.sector_size
-        self.index = -1
-        self.number = -1
-        self.parent = parent
-
-        self.dv = DiskView(parent.dv.disk, begin, end-begin)
+class Entity(object):
+    def __init__(self, disk, sector_offset, last_sector, sector_size, number, parent):
+        self.begin = sector_offset * sector_size
+        self.end = (last_sector + 1) * sector_size
+        self.size = self.end - self.begin
+        self.dv = DiskView(disk, self.begin, self.size)
         self.sector_offset = sector_offset
-        self.last_sector = end_sector-1
+        self.last_sector = last_sector
+        self.sector_size = sector_size
+        self.parent = parent
+        self.index = -1 if parent else 0
+        self.number = number
 
     @property
-    def total_sectors(self):
+    def sector_count(self):
         return self.last_sector - self.sector_offset + 1
+
+    @property
+    def entities(self):
+        yield self
+
+    def read(self, offset, size=None):
+        size = size if size else self.sector_size
+        self.dv.seek(offset)
+        return self.dv.read(size)
+
+
+class UnallocatedSpace(Entity):
+    def __init__(self, sector_offset, last_sector, parent):
+        Entity.__init__(self, parent.dv.disk, sector_offset,
+                        last_sector, parent.sector_size, -1, parent)
 
     def tabulate(self):
         return [[self.index,
-                 '{}/{}'.format(self.parent.number, self.number),
+                 '{}:-'.format(self.parent.number),
                  self.sector_offset,
                  self.last_sector,
-                 self.total_sectors,
+                 self.sector_count,
                  'Unallocated',
                  '---']]
 
+    @property
+    def sectors(self):
+        class SectorContainer(object):
+            def __init__(self, entity):
+                self.entity = entity
+
+            def _convert(self, index):
+                if index >= 0:
+                    return index
+                else:
+                    return self.entity.sector_count + index + 1
+
+            def __getitem__(self, index_or_slice):
+                sector_size = self.entity.sector_size
+                if isinstance(index_or_slice, int):
+                    index = self._convert(index_or_slice)
+                    return self.entity.read(index, sector_size)
+                elif isinstance(index_or_slice, slice):
+                    s = index_or_slice
+                    begin = self._convert(s.start)
+                    end = self._convert(s.stop)
+                    n = end - begin
+                    return self.entity.read(begin * sector_size,
+                                            n * sector_size)
+        return SectorContainer(self)
+
     def __str__(self):
         return tabulate(self.tabulate(),
-                        headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description', 'CHS', ])
+                        headers=['#', 'Slot', 'Start', 'End', 'Length',
+                                 'Description', 'CHS', ])
 
 
 class Partition(object):
-    def __init__(self, data, index, number, parent=None):
+    def __init__(self, data, number, parent=None):
         self.data = data
-        self.index = index
+        self.index = -1
         self.number = number
         self.parent = parent
 
@@ -216,13 +259,15 @@ class Partition(object):
 
 
 class MBR(object):
-    def __init__(self, disk_view, index=0, number=0, parent=None):
-        self.index = index
+    def __init__(self, disk_view, number=0, parent=None):
+        self.index = -1 if parent else 0
         self.number = number
         self.sector_size = 512
         self.dv = disk_view
         self.parent = parent
         self.sector_offset = parent.sector_offset if parent else 0
+        self.unallocated = []
+        self.unused_entries = []
 
         data = self.read(0, 512)
 
@@ -236,15 +281,24 @@ class MBR(object):
         n = self.number + 1
         for i in range(4):
             s = slices[i]
-            p = Partition(data[s], index=self._max_index+1, number=i, parent=self)
-            self.partitions.append(p)
+            p = Partition(data[s], number=i, parent=self)
+            if p.partition_type == 0:
+                self.unused_entries.append(p)
+            else:
+                self.partitions.append(p)
 
-            if p.is_extended:
-                dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
-                p.ebr = MBR(dv, index=p.index+1, number=n, parent=p)
-                n = p.ebr._max_number
+                if p.is_extended:
+                    dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
+                    p.ebr = MBR(dv, number=n, parent=p)
+                    n = p.ebr._max_number
 
         self._init_unallocated()
+
+        if parent is None:
+            i = 1
+            for e in self.entities:
+                e.index = i
+                i += 1
 
     @property
     def description(self):
@@ -267,9 +321,13 @@ class MBR(object):
     def entities(self):
         yield self
 
-        for e in sorted(self.unallocated +
-                        [e for p in self.partitions for e in p.entities],
-                        key=lambda e: e.index):
+        children = sorted(self.unallocated + [p for p in self.partitions],
+                          key=lambda e: e.sector_offset)
+        for c in children:
+            for e in c.entities:
+                yield e
+
+        for e in self.unused_entries:
             yield e
 
     def __getitem__(self, i):
@@ -289,26 +347,28 @@ class MBR(object):
         ps = sorted(self.partitions.copy(),
                     key=lambda p: p.sector_offset)
 
-        if self.sector_offset + 1 < ps[0].sector_offset:
-            print(self.sector_offset, ps[0].index, ps[0].sector_offset)
-            us = UnallocatedSpace(self.sector_offset+1, ps[0].sector_offset, parent=self)
-            self.unallocated.append(us)
+        if len(ps) == 0:
+            if self.sector_offset < self.last_sector:
+                us = UnallocatedSpace(self.sector_offset+1, self.last_sector, parent=self)
+                self.unallocated.append(us)
+        else:
+            if self.sector_offset + 1 < ps[0].sector_offset:
+                us = UnallocatedSpace(self.sector_offset+1, ps[0].sector_offset,
+                                      parent=self)
+                self.unallocated.append(us)
 
-        if ps[0].last_sector + 1 < ps[1].sector_offset:
-            us = UnallocatedSpace(ps[0].last_sector+1, ps[1].sector_offset, parent=self)
-            self.unallocated.append(us)
+            for i in range(1, len(ps)):
+                prev = ps[i - 1]
+                curr = ps[i]
+                if prev.last_sector + 1 < curr.sector_offset:
+                    us = UnallocatedSpace(prev.last_sector+1, curr.sector_offset,
+                                          parent=self)
+                    self.unallocated.append(us)
 
-        if ps[1].last_sector + 1 < ps[2].sector_offset:
-            us = UnallocatedSpace(ps[1].last_sector+1, ps[2].sector_offset, parent=self)
-            self.unallocated.append(us)
-
-        if ps[2].last_sector + 1 < ps[3].sector_offset:
-            us = UnallocatedSpace(ps[2].last_sector+1, ps[3].sector_offset, parent=self)
-            self.unallocated.append(us)
-
-        if ps[3].last_sector < self.last_sector:
-            us = UnallocatedSpace(ps[3].last_sector+1, self.last_sector+1, parent=self)
-            self.unallocated.append(us)
+            if ps[-1].last_sector < self.last_sector:
+                us = UnallocatedSpace(ps[-1].last_sector+1,
+                                      self.last_sector, parent=self)
+                self.unallocated.append(us)
 
     def hexdump(self):
         data = self.read(0, 512)
