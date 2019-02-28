@@ -88,7 +88,7 @@ class Partition(Entity):
 
     @property
     def filesystem(self):
-        return filesystem.get_filesystem(self.dv)
+        return filesystem.get_filesystem(self.dv, self)
 
     def read(self, offset, size):
         self.dv.seek(offset)

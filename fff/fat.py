@@ -55,7 +55,7 @@ class FAT32(FAT):
         self.type = 'FAT32'
 
 
-def try_get(disk, sector0):
+def try_get(disk, sector0, parent):
     if sector0[-2] == 0x55 and sector0[-1] == 0xAA:
         ver = FAT.get_version(sector0, disk.size)
         if ver == 12:

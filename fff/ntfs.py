@@ -1,3 +1,6 @@
+from .entity import Entity
+from .data_units import DataUnits
+
 import struct
 from tabulate import tabulate
 
@@ -62,11 +65,22 @@ class BootSector(object):
         return self.__str__()
 
 
-class NTFS(object):
-    def __init__(self, disk, sector0):
+class NTFS(Entity):
+    def __init__(self, dv, sector0, parent):
         self.boot_sector = BootSector(sector0)
 
+        Entity.__init__(self, dv.disk, dv.begin, dv.size,
+                        self.boot_sector.bytes_per_sector,
+                        -1, parent)
 
-def try_get(disk, sector0):
+        self.sectors = DataUnits(self, self.sector_size, self.sector_count)
+
+        bs = self.boot_sector
+        cluster_size = self.sector_size * bs.sectors_per_cluster
+        cluster_count = bs.total_sectors // bs.sectors_per_cluster
+        self.clusters = DataUnits(self, cluster_size, cluster_count)
+
+
+def try_get(disk, sector0, parent):
     if sector0[3:11] == NTFS_SIGNATURE:
-        return NTFS(disk, sector0)
+        return NTFS(disk, sector0, parent)

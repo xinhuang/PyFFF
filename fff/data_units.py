@@ -8,12 +8,12 @@ class DataUnits(object):
         if index >= 0:
             return index
         else:
-            return self.unit_count + index + 1
+            return self.unit_count + index
 
     def __getitem__(self, index_or_slice):
         if isinstance(index_or_slice, int):
-            index = self._convert(index_or_slice)
-            return self.entity.read(index, self.unit_size)
+            offset = self._convert(index_or_slice) * self.unit_size
+            return self.entity.read(offset, self.unit_size)
         elif isinstance(index_or_slice, slice):
             s = index_or_slice
             begin = self._convert(s.start)
