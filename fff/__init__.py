@@ -59,7 +59,9 @@ class Partition(Entity):
         sector_offset = struct.unpack('<I', data[8:12])[0] + parent.sector_offset
         sector_count = struct.unpack('<I', data[12:16])[0]
         last_sector = sector_offset + sector_count - 1
-        Entity.__init__(self, parent.dv.disk, sector_offset, last_sector,
+        Entity.__init__(self, parent.dv.disk,
+                        sector_offset * parent.sector_size,
+                        sector_count * parent.sector_size,
                         parent.sector_size, number, parent)
 
         self.ebr = None

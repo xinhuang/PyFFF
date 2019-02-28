@@ -2,13 +2,15 @@ from .disk_view import DiskView
 
 
 class Entity(object):
-    def __init__(self, disk, sector_offset, last_sector, sector_size, number, parent):
-        self.begin = sector_offset * sector_size
-        self.end = (last_sector + 1) * sector_size
-        self.size = self.end - self.begin
+    def __init__(self, disk, offset, size, sector_size, number, parent):
+        self.begin = offset
+        self.end = offset + size
+        self.size = size
         self.dv = DiskView(disk, self.begin, self.size)
-        self.sector_offset = sector_offset
-        self.last_sector = last_sector
+        assert offset % sector_size == 0
+        self.sector_offset = offset // sector_size
+        # FIXME: There shouldn't be slack space in the unit of sector
+        self.last_sector = self.end // sector_size - 1
         self.sector_size = sector_size
         self.parent = parent
         self.index = -1 if parent else 0

@@ -3,8 +3,10 @@ from .entity import Entity
 
 class UnallocatedSpace(Entity):
     def __init__(self, sector_offset, last_sector, parent):
-        Entity.__init__(self, parent.dv.disk, sector_offset,
-                        last_sector, parent.sector_size, -1, parent)
+        Entity.__init__(self, parent.dv.disk,
+                        sector_offset * parent.sector_size,
+                        (last_sector - sector_offset + 1) * parent.sector_size,
+                        parent.sector_size, -1, parent)
 
     def tabulate(self):
         return [[self.index,
