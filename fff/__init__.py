@@ -136,14 +136,15 @@ class Partition(Entity):
                                  'Description', 'CHS', ])
 
 
-class MBR(object):
+class MBR(Entity):
+
+    SECTOR_SIZE = 512
+
     def __init__(self, disk_view, number=0, parent=None):
-        self.sector_offset = parent.sector_offset if parent else 0
-        self.number = number
-        self.sector_size = 512
-        self.dv = disk_view
-        self.parent = parent
-        self.index = -1 if parent else 0
+        disk = disk_view.disk
+        offset = disk_view.begin
+        size = disk_view.size
+        Entity.__init__(self, disk, offset, size, MBR.SECTOR_SIZE, number, parent)
 
         self.unallocated = []
         self.unused_entries = []
@@ -184,10 +185,6 @@ class MBR(object):
         return 'Extended Boot Record' if self.parent else 'Master Boot Record'
 
     @property
-    def last_sector(self):
-        return self.sector_offset
-
-    @property
     def _max_number(self):
         return max([p.ebr.number for p in self.partitions if p.is_extended] +
                    [self.number])
@@ -211,11 +208,6 @@ class MBR(object):
         for e in self.entities:
             if e.index == i:
                 return e
-
-    def read(self, offset, size):
-        self.dv.seek(offset)
-        data = self.dv.read(size)
-        return data
 
     def _init_unallocated(self):
         self.unallocated = []
