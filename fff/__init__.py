@@ -1,4 +1,7 @@
 from . import filesystem
+from .disk_view import DiskView
+from .entity import Entity
+from .unallocated_space import UnallocatedSpace
 
 from tabulate import tabulate
 from hexdump import hexdump as hd
@@ -33,37 +36,6 @@ PARTITION_TYPES = {
 }
 
 
-class DiskView(object):
-    def __init__(self, disk, begin, size):
-        assert not isinstance(disk, DiskView)
-
-        self.disk = disk
-        self._begin = begin
-        self._end = begin + size
-
-        assert self._begin <= self._end
-
-    @property
-    def size(self):
-        return self._end - self._begin
-
-    def seek(self, offset):
-        location = self._begin + offset
-
-        assert location >= self._begin and location < self._end
-        self.disk.seek(location)
-
-    def read(self, size):
-        assert self.disk.tell() + size - 1 < self._end
-        return self.disk.read(size)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __str__(self):
-        return '<DiskView {} {}>'.format(self._begin, self.size)
-
-
 class CHS(object):
     def __init__(self, data):
         self.h = data[0]
@@ -72,79 +44,6 @@ class CHS(object):
 
     def __str__(self):
         return '{}/{}/{}'.format(self.c, self.h, self.s)
-
-
-class Entity(object):
-    def __init__(self, disk, sector_offset, last_sector, sector_size, number, parent):
-        self.begin = sector_offset * sector_size
-        self.end = (last_sector + 1) * sector_size
-        self.size = self.end - self.begin
-        self.dv = DiskView(disk, self.begin, self.size)
-        self.sector_offset = sector_offset
-        self.last_sector = last_sector
-        self.sector_size = sector_size
-        self.parent = parent
-        self.index = -1 if parent else 0
-        self.number = number
-
-    @property
-    def sector_count(self):
-        return self.last_sector - self.sector_offset + 1
-
-    @property
-    def entities(self):
-        yield self
-
-    def read(self, offset, size=None):
-        size = size if size else self.sector_size
-        self.dv.seek(offset)
-        return self.dv.read(size)
-
-
-class UnallocatedSpace(Entity):
-    def __init__(self, sector_offset, last_sector, parent):
-        Entity.__init__(self, parent.dv.disk, sector_offset,
-                        last_sector, parent.sector_size, -1, parent)
-
-    def tabulate(self):
-        return [[self.index,
-                 '{}:-'.format(self.parent.number),
-                 self.sector_offset,
-                 self.last_sector,
-                 self.sector_count,
-                 'Unallocated',
-                 '---']]
-
-    @property
-    def sectors(self):
-        class SectorContainer(object):
-            def __init__(self, entity):
-                self.entity = entity
-
-            def _convert(self, index):
-                if index >= 0:
-                    return index
-                else:
-                    return self.entity.sector_count + index + 1
-
-            def __getitem__(self, index_or_slice):
-                sector_size = self.entity.sector_size
-                if isinstance(index_or_slice, int):
-                    index = self._convert(index_or_slice)
-                    return self.entity.read(index, sector_size)
-                elif isinstance(index_or_slice, slice):
-                    s = index_or_slice
-                    begin = self._convert(s.start)
-                    end = self._convert(s.stop)
-                    n = end - begin
-                    return self.entity.read(begin * sector_size,
-                                            n * sector_size)
-        return SectorContainer(self)
-
-    def __str__(self):
-        return tabulate(self.tabulate(),
-                        headers=['#', 'Slot', 'Start', 'End', 'Length',
-                                 'Description', 'CHS', ])
 
 
 class Partition(object):
