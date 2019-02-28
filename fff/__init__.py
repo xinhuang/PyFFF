@@ -94,8 +94,9 @@ class UnallocatedSpace(object):
 
 
 class Partition(object):
-    def __init__(self, data, number, parent=None):
+    def __init__(self, data, index, number, parent=None):
         self.data = data
+        self.index = index
         self.number = number
         self.parent = parent
 
@@ -163,6 +164,13 @@ class Partition(object):
         return '{} ({})'.format(PARTITION_TYPES.get(self.partition_type, default),
                                 hex(self.partition_type))
 
+    @property
+    def _max_index(self):
+        if not self.is_extended:
+            return self.index
+        else:
+            return max([self.ebr._max_index])
+
     def hexdump(self):
         return hd(self.data)
 
@@ -178,7 +186,8 @@ class Partition(object):
         pass
 
     def tabulate(self):
-        return ([['{}:{}'.format(self.parent.number, self.number),
+        return ([[self.index,
+                  '{}:{}'.format(self.parent.number, self.number),
                   self.sector_offset,
                   self.sector_offset + self.total_sector,
                   self.total_sector,
@@ -188,45 +197,40 @@ class Partition(object):
 
     def __str__(self):
         return tabulate(self.tabulate(),
-                        headers=['Start', 'End', 'Length', 'Description', 'CHS', ])
-
-
-class PartitionContainer(object):
-    def __init__(self, parent):
-        self.parent = parent
-
-    def __getitem__(self, i):
-        self.parent.get_partition(i)
+                        headers=['', '', 'Start', 'End', 'Length', 'Description', 'CHS', ])
 
 
 class MBR(object):
-    def __init__(self, disk_view, number=0, parent=None):
+    def __init__(self, disk_view, index=0, number=0, parent=None):
+        self.index = index
         self.number = number
         self.sector_size = 512
         self.dv = disk_view
         self.parent = parent
         self.sector_offset = parent.sector_offset if parent else 0
 
-        data = self.read_data()
+        data = self.read(0, 512)
 
         self.boot_code = struct.unpack('<446B', data[0:446])
         self.signature = struct.unpack('<H', data[510:])[0]
 
         assert self.signature == 0xAA55
 
-        self.partitions = [Partition(data[446:462], number=0, parent=self),
-                           Partition(data[462:478], number=1, parent=self),
-                           Partition(data[478:494], number=2, parent=self),
-                           Partition(data[494:510], number=3, parent=self), ]
+        self.partitions = []
+        slices = [slice(446, 462), slice(462, 478), slice(478, 494), slice(494, 510)]
+        n = self.number + 1
+        for i in range(4):
+            s = slices[i]
+            p = Partition(data[s], index=self._max_index+1, number=i, parent=self)
+            self.partitions.append(p)
+
+            if p.is_extended:
+                dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
+                p.ebr = MBR(dv, index=p.index+1, number=n, parent=p)
+                n = p.ebr._max_number
 
         # TODO: Unallocated space
         self.unallocated = []
-
-        n = self.number + 1
-        for p in [p for p in self.partitions if p.is_extended]:
-            dv = DiskView(self.dv.disk, p.sector_offset * self.sector_size, p.size)
-            p.ebr = MBR(dv, number=n, parent=p)
-            n = p.ebr._max_number
 
     @property
     def description(self):
@@ -237,26 +241,34 @@ class MBR(object):
         return max([p.ebr.number for p in self.partitions if p.is_extended] +
                    [self.number])
 
-    def read_data(self):
-        self.dv.seek(0)
-        data = self.dv.read(512)
+    @property
+    def _max_index(self):
+        return max([p._max_index for p in self.partitions] + [self.index])
+
+    @property
+    def __getitem__(self, i):
+        assert isinstance(i, int)
+
+    def read(self, offset, size):
+        self.dv.seek(offset)
+        data = self.dv.read(size)
         return data
 
     def get_partition(self, i):
         pass
 
     def hexdump(self):
-        data = self.read_data()
+        data = self.read(0, 512)
         return hd(data)
 
     def tabulate(self):
-        return ([['{}'.format(self.number),
+        return ([[self.index, self.number,
                   self.sector_offset, self.sector_offset, 1, self.description]] +
                 [i for p in self.partitions for i in p.tabulate()])
 
     def __str__(self):
         return tabulate(self.tabulate(),
-                        headers=['', 'Start', 'End', 'Length', 'Description'])
+                        headers=['', '', 'Start', 'End', 'Length', 'Description'])
 
 
 class DiskImage(object):
