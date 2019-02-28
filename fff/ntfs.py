@@ -25,18 +25,31 @@ class BootSector(object):
         self.total_sectors = struct.unpack('<Q', sector0[0x28:0x28+8])[0]
         self.mft_cluster_number = struct.unpack('<Q', sector0[0x30:0x30+8])[0]
         self.mftmirr_cluster_number = struct.unpack('<Q', sector0[0x38:0x38+8])[0]
-        self.cluster_per_file_record_segment = sector0[0x40]
+        self.cluster_per_file_record_segment = self._decode_size(
+            struct.unpack('<b', sector0[0x40:0x41])[0])
 
-        self.cluster_per_index_buffer = sector0[0x44]
+        self.cluster_per_index_buffer = self._decode_size(
+            struct.unpack('<b', sector0[0x44:0x45])[0])
 
         self.volume_serial_number = struct.unpack('<Q', sector0[0x48:0x48+8])[0]
 
         self.bootstrap_code = sector0[0x54:0x54+426]
         self.marker = sector0[0x1FE:0x1FE+2]
 
+    @property
+    def cluster_size(self):
+        return self.bytes_per_sector * self.sectors_per_cluster
+
+    def _decode_size(self, value):
+        if value >= 0:
+            return value
+        else:
+            return 2 ** -value / self.cluster_size
+
     def tabulate(self):
         return [['JMP', self.jmp.hex()],
-                ['Signature', self.signature.decode()],
+                ['Signature', '{}({})'.format(self.signature.decode(),
+                                              self.signature.hex())],
                 ['Bytes Per Sector', self.bytes_per_sector],
                 ['Sectors Per Cluster', self.sectors_per_cluster],
                 ['...', '...'],

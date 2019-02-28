@@ -128,6 +128,9 @@ class MBR(Entity):
         return tabulate(rows,
                         headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description'])
 
+    def __repr__(self):
+        return self.__str__()
+
 
 class DiskImage(object):
     def __init__(self, filepath):
