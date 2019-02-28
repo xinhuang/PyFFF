@@ -182,8 +182,12 @@ class Partition(object):
         self.dv.seek(offset)
         return self.dv.read(size)
 
-    def get_partition(self, i):
-        pass
+    @property
+    def entities(self):
+        yield self
+        if self.is_extended:
+            for e in self.ebr.entities:
+                yield e
 
     def tabulate(self):
         return ([[self.index,
@@ -234,7 +238,7 @@ class MBR(object):
 
     @property
     def description(self):
-        return 'EBR' if self.parent else 'MBR'
+        return 'Extended Boot Record' if self.parent else 'Master Boot Record'
 
     @property
     def _max_number(self):
@@ -246,8 +250,17 @@ class MBR(object):
         return max([p._max_index for p in self.partitions] + [self.index])
 
     @property
+    def entities(self):
+        yield self
+        for e in [e for p in self.partitions for e in p.entities]:
+            yield e
+
     def __getitem__(self, i):
         assert isinstance(i, int)
+
+        for e in self.entities:
+            if e.index == i:
+                return e
 
     def read(self, offset, size):
         self.dv.seek(offset)
