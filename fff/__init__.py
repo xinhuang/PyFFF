@@ -4,6 +4,8 @@ from tabulate import tabulate
 from hexdump import hexdump as hd
 
 import struct
+import operator
+from functools import reduce
 
 
 EXTENDED_PARTITION_TYPES = set([0x05, 0x0F])
@@ -73,24 +75,33 @@ class CHS(object):
 
 
 class UnallocatedSpace(object):
-    def __init__(self, disk, sector_offset, total_sector):
-        self.dv = disk
+    def __init__(self, sector_offset, end_sector, parent):
+        begin = sector_offset*parent.sector_size
+        end = end_sector*parent.sector_size
+        self.index = -1
+        self.number = -1
+        self.parent = parent
+
+        self.dv = DiskView(parent.dv.disk, begin, end-begin)
         self.sector_offset = sector_offset
-        self.total_sector = total_sector
+        self.last_sector = end_sector-1
 
     @property
-    def last_sector(self):
-        return self.sector_offset + self.total_sector - 1
-
-    @property
-    def is_extended(self):
-        return False
+    def total_sectors(self):
+        return self.last_sector - self.sector_offset + 1
 
     def tabulate(self):
-        return [[self.sector_offset,
-                 self.sector_offset + self.total_sector,
-                 self.total_sector,
-                 'Unallocated']]
+        return [[self.index,
+                 '{}/{}'.format(self.parent.number, self.number),
+                 self.sector_offset,
+                 self.last_sector,
+                 self.total_sectors,
+                 'Unallocated',
+                 '---']]
+
+    def __str__(self):
+        return tabulate(self.tabulate(),
+                        headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description', 'CHS', ])
 
 
 class Partition(object):
@@ -190,18 +201,18 @@ class Partition(object):
                 yield e
 
     def tabulate(self):
-        return ([[self.index,
-                  '{}:{}'.format(self.parent.number, self.number),
-                  self.sector_offset,
-                  self.sector_offset + self.total_sector,
-                  self.total_sector,
-                  self.description,
-                  'CHS {} - {}'.format(self.start_chs, self.end_chs)]] +
-                (self.ebr.tabulate() if self.is_extended else []))
+        return [[self.index,
+                 '{}:{}'.format(self.parent.number, self.number),
+                 self.sector_offset,
+                 self.sector_offset + self.total_sector,
+                 self.total_sector,
+                 self.description,
+                 'CHS {} - {}'.format(self.start_chs, self.end_chs)]]
 
     def __str__(self):
-        return tabulate(self.tabulate(),
-                        headers=['', '', 'Start', 'End', 'Length', 'Description', 'CHS', ])
+        rows = reduce(operator.add, [e.tabulate() for e in self.entities])
+        return tabulate(rows,
+                        headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description', 'CHS', ])
 
 
 class MBR(object):
@@ -233,12 +244,15 @@ class MBR(object):
                 p.ebr = MBR(dv, index=p.index+1, number=n, parent=p)
                 n = p.ebr._max_number
 
-        # TODO: Unallocated space
-        self.unallocated = []
+        self._init_unallocated()
 
     @property
     def description(self):
         return 'Extended Boot Record' if self.parent else 'Master Boot Record'
+
+    @property
+    def last_sector(self):
+        return self.sector_offset
 
     @property
     def _max_number(self):
@@ -252,7 +266,10 @@ class MBR(object):
     @property
     def entities(self):
         yield self
-        for e in [e for p in self.partitions for e in p.entities]:
+
+        for e in sorted(self.unallocated +
+                        [e for p in self.partitions for e in p.entities],
+                        key=lambda e: e.index):
             yield e
 
     def __getitem__(self, i):
@@ -267,21 +284,44 @@ class MBR(object):
         data = self.dv.read(size)
         return data
 
-    def get_partition(self, i):
-        pass
+    def _init_unallocated(self):
+        self.unallocated = []
+        ps = sorted(self.partitions.copy(),
+                    key=lambda p: p.sector_offset)
+
+        if self.sector_offset + 1 < ps[0].sector_offset:
+            print(self.sector_offset, ps[0].index, ps[0].sector_offset)
+            us = UnallocatedSpace(self.sector_offset+1, ps[0].sector_offset, parent=self)
+            self.unallocated.append(us)
+
+        if ps[0].last_sector + 1 < ps[1].sector_offset:
+            us = UnallocatedSpace(ps[0].last_sector+1, ps[1].sector_offset, parent=self)
+            self.unallocated.append(us)
+
+        if ps[1].last_sector + 1 < ps[2].sector_offset:
+            us = UnallocatedSpace(ps[1].last_sector+1, ps[2].sector_offset, parent=self)
+            self.unallocated.append(us)
+
+        if ps[2].last_sector + 1 < ps[3].sector_offset:
+            us = UnallocatedSpace(ps[2].last_sector+1, ps[3].sector_offset, parent=self)
+            self.unallocated.append(us)
+
+        if ps[3].last_sector < self.last_sector:
+            us = UnallocatedSpace(ps[3].last_sector+1, self.last_sector+1, parent=self)
+            self.unallocated.append(us)
 
     def hexdump(self):
         data = self.read(0, 512)
         return hd(data)
 
     def tabulate(self):
-        return ([[self.index, self.number,
-                  self.sector_offset, self.sector_offset, 1, self.description]] +
-                [i for p in self.partitions for i in p.tabulate()])
+        return [[self.index, self.number,
+                 self.sector_offset, self.sector_offset, 1, self.description]]
 
     def __str__(self):
-        return tabulate(self.tabulate(),
-                        headers=['', '', 'Start', 'End', 'Length', 'Description'])
+        rows = reduce(operator.add, [e.tabulate() for e in self.entities])
+        return tabulate(rows,
+                        headers=['#', 'Slot', 'Start', 'End', 'Length', 'Description'])
 
 
 class DiskImage(object):
