@@ -1,4 +1,5 @@
 from .entity import Entity
+from .data_units import DataUnits
 from . import filesystem
 
 from tabulate import tabulate
@@ -62,24 +63,7 @@ class Partition(Entity):
                         parent.sector_size, number, parent)
 
         self.ebr = None
-
-    @property
-    def sectors(self):
-        class SectorContainer(object):
-            def __init__(self, partition):
-                self.partition = partition
-
-            def __getitem__(self, index_or_slice):
-                sector_size = self.partition.sector_size
-                if isinstance(index_or_slice, int):
-                    index = index_or_slice
-                    return self.partition.read(index, sector_size)
-                elif isinstance(index_or_slice, slice):
-                    s = index_or_slice
-                    n = s.stop - s.start
-                    return self.partition.read(s.start * sector_size,
-                                               n * sector_size)
-        return SectorContainer(self)
+        self.sectors = DataUnits(self, self.sector_size, self.sector_count)
 
     @property
     def is_bootable(self):
