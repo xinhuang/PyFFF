@@ -5,10 +5,13 @@ from .partition import Partition
 
 from tabulate import tabulate
 from hexdump import hexdump as hd
+import filetype
 
 import struct
 import operator
 from functools import reduce
+from zipfile import ZipFile
+import gzip
 
 
 class MBR(Entity):
@@ -135,10 +138,27 @@ class MBR(Entity):
 class DiskImage(object):
     def __init__(self, filepath):
         self.filepath = filepath
-        self._file = open(filepath, 'rb')
+
+        kind = filetype.guess(self.filepath)
+        self.mime = kind.mime if kind else 'n/a'
+        if kind is None:
+            self._archive = None
+            self._file = open(filepath, 'rb')
+        elif kind.mime == 'application/zip':
+            self._archive = ZipFile(self.filepath)
+            first_file = self._archive.namelist()[0]
+            self._file = self._archive.open(first_file)
+        elif kind.mime == 'application/gzip':
+            self._archive = None
+            self._file = gzip.open(self.filepath)
+        else:
+            assert 'Unsupported MIME: {}'.format(kind.mime) and False
+
         self._file.seek(0, 2)
         dv = DiskView(self._file, 0, self._file.tell())
         self.volume = MBR(dv)
 
     def close(self):
         self._file.close()
+        if self._archive:
+            self._archive.close()
