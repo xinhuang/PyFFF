@@ -1,26 +1,19 @@
 
-# Table of Contents
-
-1.  [Prototype](#org93e4a41)
-
-
-
-<a id="org93e4a41"></a>
 
 # Prototype
 
     import fff
     from hexdump import hexdump as hd
     
-    with fff.DiskImage('disk1.dd', type='raw') as disk:
+    with fff.DiskImage('disk1.dd.zip') as disk:
         print(hd(disk.volume.sectors[0]))
         print(disk.volume)
     
         partitions = disk.volume.partitions
     
         part = [p for p in partitions if p.filesystem.format == fff.FAT32][0]
-        print(hd(part.boot_sector.hexdump()))
-        print(part.boot_sector)
+        print(part.boot_sector.hexdump())
+        print(part.boot_sector[0:-1])
     
         print([e for e in part.root_dir.entries if e.is_allocated()])
     
