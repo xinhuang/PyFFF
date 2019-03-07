@@ -25,6 +25,7 @@ class NTFS(Entity):
                         self.boot_sector.bytes_per_sector,
                         -1, parent)
 
+        self.fs_type = 'NTFS'
         self.sectors = DataUnits(self, self.sector_size, self.sector_count)
 
         bs = self.boot_sector
