@@ -19,8 +19,8 @@ class File(Entity):
 
 
 class MFT(File):
-    def __init__(self, filesystem: Entity, cluster: bytes):
-        mft_entry = MFTEntry(cluster, None)
+    def __init__(self, filesystem: Entity, data: bytes):
+        mft_entry = MFTEntry(data, filesystem)
         File.__init__(self, mft_entry, filesystem)
 
         self.mft_entries = [self.mft_entry]
@@ -44,7 +44,8 @@ class NTFS(Entity):
         self.clusters = DataUnits(self, cluster_size, cluster_count)
 
         i = self.boot_sector.mft_cluster_number
-        self.mft = MFT(self, self.clusters[i])
+        n = self.boot_sector.cluster_per_file_record_segment
+        self.mft = MFT(self, self.clusters[i:i+n])
 
     @property
     def sector_size(self):

@@ -1,12 +1,14 @@
 from .entity import Entity
 from .data_units import DataUnits
 from . import filesystem
+from .disk_view import DiskView
 
 from tabulate import tabulate
 
 import struct
 from functools import reduce
 import operator
+from typing import Optional
 
 
 EXTENDED_PARTITION_TYPES = set([0x05, 0x0F])
@@ -45,11 +47,13 @@ class CHS(object):
 
 
 class Partition(Entity):
-    def __init__(self, data, number, parent):
-        Entity.__init__(self)
+    def __init__(self, data: bytes, number: int, parent):
+        super().__init__()
 
         self.data = data
-        self.dv: Optional[DiskView]
+        self.number = number
+        self.parent = parent
+        self.dv: Optional[DiskView] = None
 
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
         self.partition_type = struct.unpack('<B', data[4:5])[0]
@@ -66,7 +70,7 @@ class Partition(Entity):
         self.last_sector = last_sector
         self.size = sector_count * self.sector_size
 
-        self.ebr = None
+        self.ebr: Optional[Entity] = None
         self.sectors = DataUnits(self, self.sector_size, sector_count)
 
     @property
@@ -110,7 +114,7 @@ class Partition(Entity):
                  '{}:{}'.format(self.parent.number, self.number),
                  self.first_sector,
                  self.last_sector if not self.is_unallocated else '-',
-                 self.sector_count,
+                 len(self.sectors),
                  self.description,
                  'CHS {} - {}'.format(self.start_chs, self.end_chs)]]
 

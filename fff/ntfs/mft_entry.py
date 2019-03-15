@@ -1,4 +1,4 @@
-from .mft_attribute import MFTAttribute
+from . import mft_attr
 
 from tabulate import tabulate
 
@@ -6,9 +6,9 @@ import struct
 
 
 class MFTEntry(object):
-    def __init__(self, data, parent):
+    def __init__(self, data, filesystem):
         self.data = data
-        self.parent = parent
+        self.fs = filesystem
 
         self.sig = data[0:4]
         self.offset_fixup = struct.unpack('<H', data[4:6])[0]
@@ -25,12 +25,12 @@ class MFTEntry(object):
         self._attrs = None
 
     @property
-    def attributes(self):
+    def attrs(self):
         if self._attrs is None:
             self._attrs = []
             offset = self.attr_offset
             while self.data[offset:offset+4] != b'\xFF' * 4:
-                attr = MFTAttribute(self.data, offset)
+                attr = mft_attr.create(self.data, offset, self.fs)
                 self._attrs.append(attr)
                 offset += attr.size
 
@@ -49,7 +49,7 @@ class MFTEntry(object):
                 ['Allocated Size of MFT Entry', self.alloc_size],
                 ['File Reference to Base Record', self.base_ref],
                 ['Next Attribute ID', self.next_attr_id],
-                ['#attributes', len(self.attributes)], ]
+                ['#attributes', len(self.attrs)], ]
 
     def __str__(self):
         return tabulate(self.tabulate(),
