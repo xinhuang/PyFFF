@@ -30,8 +30,16 @@ class NTFSTests(TestCase):
 
         self.assertEqual(251, len(self.sut.mft.entries))
 
+    def test_mft_entry_attributes(self):
+        self.assertTrue(self.sut.mft.mft_entry.attrs)
+
     def test_tabulate_StandardInformation(self):
-        self.sut.mft.mft_entries[0].tabulate()
+        self.sut.mft.mft_entry.attrs[0].tabulate()
+
+    def test_MFT_FileName(self):
+        self.assertEqual('$MFT', self.sut.mft.mft_entry.attrs[1].filename)
+
+        self.sut.mft.mft_entry.attrs[1].tabulate()
 
     def test_tabulate_BootSector(self):
         self.sut.boot_sector.tabulate()

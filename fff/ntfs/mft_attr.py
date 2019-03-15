@@ -88,7 +88,7 @@ DOS_PERM = {
     0x0040: 'Device',
     0x0080: 'Normal',
     0x0100: 'Temporary',
-    0x0200: 'Sparse',
+    0x0200: 'Sparse File',
     0x0400: 'Reparse Point',
     0x0800: 'Compressed',
     0x1000: 'Offline',
@@ -149,3 +149,66 @@ class StandardInformation(MFTAttr):
             ['Security ID', self.security_id],
             ['Quota Charged', self.quota_charged],
             ['Update Sequence Number', self.usn], ]
+
+
+NAMESPACE = {
+    0: 'POSIX',
+    1: 'Win32',
+    2: 'DOS',
+    3: 'Win32 & DOS',
+}
+
+FLAGS = {
+    **DOS_PERM,
+    0x10000000: 'Directory (copy from corresponding bit in MFT record)',
+    0x20000000: 'Index View (copy from corresponding bit in MFT record)',
+}
+
+
+@MFTAttribute(0x030, '$FILE_NAME')
+class FileName(MFTAttr):
+    def __init__(self, data: bytes, offset: int, filesystem):
+        super().__init__(data, offset, filesystem)
+
+        assert not self.non_resident
+
+        offset += 0x18
+        self.parent_dir = struct.unpack('<Q', data[offset:offset+8])[0]
+        self.ctime = struct.unpack('<Q', data[offset+8:offset+16])[0]  # File creation
+        self.atime = struct.unpack('<Q', data[offset+16:offset+24])[0]  # File altered
+        self.mtime = struct.unpack('<Q', data[offset+24:offset+32])[0]  # MFT changed
+        self.rtime = struct.unpack('<Q', data[offset+32:offset+40])[0]  # File read
+        self.allocated_size = struct.unpack('<Q', data[offset+40:offset+48])[0]
+        self.actual_size = struct.unpack('<Q', data[offset+48:offset+56])[0]
+        self.flags = struct.unpack('<I', data[offset+56:offset+60])[0]
+        self.er = struct.unpack('<I', data[offset+60:offset+64])[0]
+        self.name_length = struct.unpack('<B', data[offset+64:offset+65])[0]
+        self.namespace = struct.unpack('<B', data[offset+65:offset+66])[0]
+        self.filename = data[offset+66:offset+66+self.name_length*2].decode('utf-16')
+
+    @property
+    def flags_s(self) -> str:
+        s = hex(self.flags) + ' ('
+        for k in sorted(FLAGS.keys()):
+            if self.flags & k:
+                s += FLAGS[k] + ', '
+        s = s.rstrip(', ') + ')'
+        return s
+
+    @property
+    def namespace_s(self) -> str:
+        return '{} ({})'.format(self.namespace, NAMESPACE.get(self.namespace, 'Unrecognized'))
+
+    def tabulate(self):
+        return super().tabulate() + [
+            ['Created', self.ctime],
+            ['Modified', self.atime],
+            ['MFT Modified', self.mtime],
+            ['Accessed', self.rtime],
+            ['Allocated Size', self.allocated_size],
+            ['Actual Size', self.size],
+            ['Flags', self.flags_s],
+            ['ER', self.er],
+            ['Name Length', self.name_length],
+            ['Namespace', self.namespace_s],
+            ['File Name', self.filename], ]
