@@ -31,6 +31,12 @@ class ZipImageTests(TestCase):
         self.assertFalse(fs is None)
         self.assertTrue(fs.fs_type == 'FAT16')
 
+    def test_volume_access_sector_0(self):
+        expect = b'\xeb<\x90mkdosfs'
+        actual = self.sut.volume[10].sectors[0][:len(expect)]
+
+        self.assertEqual(expect, actual)
+
     def test_NTFS_filesystem(self):
         fs = self.sut.volume[14].filesystem
 
@@ -38,3 +44,19 @@ class ZipImageTests(TestCase):
         self.assertTrue(fs.fs_type == 'NTFS')
 
         self.assertEqual(b'\xeb\x52\x90', fs.boot_sector.jmp)
+
+    def test_NTFS_access_sector_0(self):
+        fs = self.sut.volume[14].filesystem
+
+        expect = b'\xEB\x52\x90NTFS    \x00'
+        actual = fs.sectors[0][:len(expect)]
+
+        self.assertEqual(expect, actual)
+
+    def test_NTFS_access_cluster_0(self):
+        fs = self.sut.volume[14].filesystem
+
+        expect = b'\xEB\x52\x90NTFS    \x00'
+        actual = fs.clusters[0][:len(expect)]
+
+        self.assertEqual(expect, actual)

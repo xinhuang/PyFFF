@@ -46,7 +46,10 @@ class CHS(object):
 
 class Partition(Entity):
     def __init__(self, data, number, parent):
+        Entity.__init__(self)
+
         self.data = data
+        self.dv: Optional[DiskView]
 
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
         self.partition_type = struct.unpack('<B', data[4:5])[0]
@@ -54,17 +57,17 @@ class Partition(Entity):
         self.start_chs = CHS(data[1:4])
         self.end_chs = CHS(data[5:8])
 
-        sector_offset = struct.unpack('<I', data[8:12])[0] + parent.sector_offset
+        first_sector = struct.unpack('<I', data[8:12])[0] + parent.first_sector
         sector_count = struct.unpack('<I', data[12:16])[0]
-        last_sector = sector_offset + sector_count - 1
-        Entity.__init__(self, disk=parent.dv.disk,
-                        offset=sector_offset * parent.sector_size,
-                        size=sector_count * parent.sector_size,
-                        sector_size=parent.sector_size,
-                        number=number, parent=parent)
+        last_sector = first_sector + sector_count - 1
+
+        self.sector_size = parent.sector_size
+        self.first_sector = first_sector
+        self.last_sector = last_sector
+        self.size = sector_count * self.sector_size
 
         self.ebr = None
-        self.sectors = DataUnits(self, self.sector_size, self.sector_count)
+        self.sectors = DataUnits(self, self.sector_size, sector_count)
 
     @property
     def is_bootable(self):
@@ -105,7 +108,7 @@ class Partition(Entity):
     def tabulate(self):
         return [[self.index,
                  '{}:{}'.format(self.parent.number, self.number),
-                 self.sector_offset,
+                 self.first_sector,
                  self.last_sector if not self.is_unallocated else '-',
                  self.sector_count,
                  self.description,

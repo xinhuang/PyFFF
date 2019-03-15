@@ -18,7 +18,9 @@ class DiskView(object):
         assert location >= self.begin and location < self.end
         self.disk.seek(location)
 
-    def read(self, size):
+    def read(self, size, offset=None):
+        if offset is not None:
+            self.seek(offset)
         assert self.disk.tell() + size - 1 < self.end
         return self.disk.read(size)
 
