@@ -18,13 +18,20 @@ class NTFSTests(TestCase):
         NTFSTests.sut = None
 
     def setUp(self):
-        self.sut = NTFSTests.sut
+        self.disk = NTFSTests.sut
+        self.sut = self.disk.volume[14].filesystem
 
     def tearDown(self):
         self.sut = None
+        self.disk = None
 
     def test_count_of_MFT_entries(self):
         self.skipTest('TODO: Parse NTFS MFT')
-        fs = self.sut.volume[14].filesystem
 
-        self.assertEqual(251, len(fs.mft.entries))
+        self.assertEqual(251, len(self.sut.mft.entries))
+
+    def test_tabulate_StandardInformation(self):
+        self.sut.mft.mft_entries[0].tabulate()
+
+    def test_tabulate_BootSector(self):
+        self.sut.boot_sector.tabulate()

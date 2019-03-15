@@ -25,6 +25,9 @@ class ZipImageTests(TestCase):
     def test_load_zip(self):
         self.assertFalse(self.sut.volume is None)
 
+    def test_volume_tabulate(self):
+        self.sut.volume.tabulate()
+
     def test_FAT16_filesystem(self):
         fs = self.sut.volume[10].filesystem
 
