@@ -6,7 +6,7 @@ import struct
 class BootSector(object):
     SIGNATURE = b'NTFS    '
 
-    def __init__(self, sector0):
+    def __init__(self, sector0: bytes):
         self.data = sector0[0:0x200]
         self.jmp = sector0[0:3]
         self.signature = sector0[3:11]
@@ -34,10 +34,10 @@ class BootSector(object):
         self.marker = sector0[0x1FE:0x1FE+2]
 
     @property
-    def cluster_size(self):
+    def cluster_size(self) -> int:
         return self.bytes_per_sector * self.sectors_per_cluster
 
-    def _decode_size(self, value):
+    def _decode_size(self, value: int) -> int:
         if value >= 0:
             return value
         else:

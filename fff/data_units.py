@@ -21,3 +21,6 @@ class DataUnits(object):
             n = end - begin
             return self.entity.read(begin * self.unit_size,
                                     n * self.unit_size)
+
+    def __len__(self):
+        return self.unit_count

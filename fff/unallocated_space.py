@@ -4,10 +4,11 @@ from .data_units import DataUnits
 
 class UnallocatedSpace(Entity):
     def __init__(self, sector_offset, last_sector, parent):
-        Entity.__init__(self, parent.dv.disk,
-                        sector_offset * parent.sector_size,
-                        (last_sector - sector_offset + 1) * parent.sector_size,
-                        parent.sector_size, -1, parent)
+        Entity.__init__(self, disk=parent.dv.disk,
+                        offset=sector_offset * parent.sector_size,
+                        size=(last_sector - sector_offset + 1) * parent.sector_size,
+                        sector_size=parent.sector_size,
+                        number=-1, parent=parent)
         self.sectors = DataUnits(self, self.sector_size, self.sector_count)
 
     def tabulate(self):

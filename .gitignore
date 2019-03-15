@@ -7,3 +7,4 @@
 /dist
 __pycache__
 /man
+/.mypy_cache

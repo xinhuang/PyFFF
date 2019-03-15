@@ -22,7 +22,8 @@ class MBR(Entity):
         disk = disk_view.disk
         offset = disk_view.begin
         size = disk_view.size
-        Entity.__init__(self, disk, offset, size, MBR.SECTOR_SIZE, number, parent)
+        Entity.__init__(self, disk=disk, offset=offset, size=size,
+                        sector_size=MBR.SECTOR_SIZE, number=number, parent=parent)
 
         self.unallocated = []
         self.unused_entries = []
