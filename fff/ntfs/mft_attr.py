@@ -1,10 +1,11 @@
 from tabulate import tabulate
 
 import struct
-from typing import List, Tuple, Any
+from typing import List, Any, Callable, Dict, Sequence
+
 
 # http://www.cse.scu.edu/~tschwarz/coen252_07Fall/Lectures/NTFS.html
-TYPES = {
+TYPES: Dict[int, str] = {
     0x010: '$StandardInformation',
     0x020: '$ATTRIBUTE_LIST',
     0x030: '$FILE_NAME',
@@ -25,6 +26,7 @@ TYPES = {
 
 
 class MFTAttr(object):
+
     def __init__(self, data: bytes, offset: int, filesystem):
         self.type_id = struct.unpack('<I', data[offset:offset+4])[0]
         self.size = struct.unpack('<I', data[offset+4:offset+8])[0]
@@ -35,21 +37,31 @@ class MFTAttr(object):
         self.flags = struct.unpack('<H', data[offset+12:offset+14])[0]
         self.attr_id = struct.unpack('<H', data[offset+14:offset+16])[0]
 
-        self.data = data[offset:offset+self.size]
+        self.raw = data[offset:offset+self.size]
+
+        if self.non_resident:
+            pass
+        else:
+            name_offset = offset + self.name_offset
+            self.name = data[name_offset:name_offset+self.name_length*2]
+            of = name_offset + self.name_length * 2
+            (self.attr_length, self.attr_offset, self.index_flag,
+             self.padding) = struct.unpack('<IHBB', data[of:of+8])
 
     @property
-    def type_s(self):
-        name = TYPES.get(self.type_id, 'Unrecognized')
-        return name if isinstance(name, str) else name.NAME
+    def type_s(self) -> str:
+        return TYPES.get(self.type_id, 'Unrecognized')
 
-    def tabulate(self):
-        return [['Type ID', '{} ({})'.format(self.type_id, self.type_s)],
+    def tabulate(self) -> List[Sequence[Any]]:
+        return [('Type ID', '{} ({})'.format(self.type_id, self.type_s)),
+                ['Name', self.name],
                 ['Size', self.size],
                 ['Non-Resident Flag', self.non_resident],
                 ['Name Length', self.name_length],
                 ['Name Offset', self.name_offset],
                 ['Flags', bin(self.flags)],
-                ['Attribute ID', self.attr_id]]
+                ['Attribute ID', self.attr_id],
+                ['Attribute Length', self.attr_length], ]
 
     def __str__(self):
         return tabulate(self.tabulate(),
@@ -59,11 +71,14 @@ class MFTAttr(object):
         return self.__str__()
 
 
-def create(data, offset, filesystem):
-    type_id = struct.unpack('<I', data[offset:offset+4])[0]
-    ctor = TYPES.get(type_id)
+factory: Dict[int, Callable[..., MFTAttr]] = {}
 
-    if isinstance(ctor, str):
+
+def create(data, offset, filesystem) -> MFTAttr:
+    type_id = struct.unpack('<I', data[offset:offset+4])[0]
+    ctor = factory.get(type_id)
+
+    if ctor is None:
         return MFTAttr(data, offset, filesystem)
     else:
         return ctor(data, offset, filesystem)
@@ -72,7 +87,7 @@ def create(data, offset, filesystem):
 def MFTAttribute(type_id, name):
     def decorator(cls):
         cls.NAME = name
-        TYPES[type_id] = cls
+        factory[type_id] = cls
 
         def wrapper(*args, **kwargs):
             return cls(*args, **kwargs)
@@ -135,7 +150,7 @@ class StandardInformation(MFTAttr):
         s = s.rstrip(', ') + ')'
         return s
 
-    def tabulate(self) -> List[Tuple[str, Any]]:
+    def tabulate(self) -> List[Sequence[Any]]:
         return super().tabulate() + [
             ['Created', self.ctime],
             ['Modified', self.atime],
@@ -197,7 +212,8 @@ class FileName(MFTAttr):
 
     @property
     def namespace_s(self) -> str:
-        return '{} ({})'.format(self.namespace, NAMESPACE.get(self.namespace, 'Unrecognized'))
+        return '{} ({})'.format(self.namespace,
+                                NAMESPACE.get(self.namespace, 'Unrecognized'))
 
     def tabulate(self):
         return super().tabulate() + [
@@ -212,3 +228,20 @@ class FileName(MFTAttr):
             ['Name Length', self.name_length],
             ['Namespace', self.namespace_s],
             ['File Name', self.filename], ]
+
+
+@MFTAttribute(0x080, '$DATA')
+class Data(MFTAttr):
+    def __init__(self, data: bytes, offset: int, filesystem):
+        super().__init__(data, offset, filesystem)
+
+        if self.non_resident:
+            self.data = b'TODO: Not Implemented!'
+        else:
+            offset += 0x18
+            self.data = data[offset:offset+self.size]
+
+    def tabulate(self):
+        return super().tabulate() + [
+            ['Data', self.data.hex()]
+        ]

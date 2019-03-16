@@ -34,6 +34,14 @@ class NTFSTests(TestCase):
         self.assertTrue(self.sut.mft.mft_entry.attrs)
 
     def test_tabulate_StandardInformation(self):
+        sut = self.sut.mft.mft_entry.attrs[0]
+
+        self.assertEqual(116444736000000000, sut.ctime)
+        self.assertEqual(116444736000000000, sut.atime)
+        self.assertEqual(116444736000000000, sut.mtime)
+        self.assertEqual(116444736000000000, sut.rtime)
+        self.assertEqual(0x6, sut.perm)
+
         self.sut.mft.mft_entry.attrs[0].tabulate()
 
     def test_MFT_FileName(self):
