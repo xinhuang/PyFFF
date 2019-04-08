@@ -51,3 +51,9 @@ class NTFSTests(TestCase):
 
     def test_tabulate_BootSector(self):
         self.sut.boot_sector.tabulate()
+
+    def test_MFT_data_runs(self):
+        data_attr = self.sut.mft.attr(type_id='$DATA')
+
+        self.assertEqual(1, len(data_attr.data_runs))
+        self.assertEqual([(251, 16)], data_attr.data_runs)

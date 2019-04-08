@@ -28,13 +28,15 @@ TYPES: Dict[int, str] = {
 def parse_data_runs(data, offset):
     data_runs = []
     while data[offset] != 0:
+        print(offset, hex(data[offset]), data_runs)
         header = data[offset]
         nlength = header >> 4
         noffset = header & 0x0F
 
-        offset += 1 + nlength + noffset
         data_runs.append((int.from_bytes(data[offset+1:offset+1+nlength], byteorder='big'),
                           int.from_bytes(data[offset+1+nlength:offset+1+nlength+noffset], byteorder='big')))
+
+        offset += 1 + nlength + noffset
 
     offset += 1
     return offset, data_runs
@@ -272,12 +274,12 @@ class Data(MFTAttr):
         super().__init__(data, offset, filesystem)
 
         if self.non_resident:
-            self.data = b'TODO: Not Implemented!'
+            self.data = None
         else:
             offset += 0x18
             self.data = data[offset:offset+self.size]
 
     def tabulate(self):
         return super().tabulate() + [
-            ['Data', self.data.hex()]
+            ['Data', self.data.hex() if self.data else 'None']
         ]
