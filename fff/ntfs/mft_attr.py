@@ -1,7 +1,7 @@
 from tabulate import tabulate
 
 import struct
-from typing import List, Any, Callable, Dict, Sequence
+from typing import List, Any, Callable, Dict, Sequence, Tuple, Optional, cast
 
 
 # http://www.cse.scu.edu/~tschwarz/coen252_07Fall/Lectures/NTFS.html
@@ -25,21 +25,45 @@ TYPES: Dict[int, str] = {
 }
 
 
-def parse_data_runs(data, offset):
-    data_runs = []
+class DataRun(object):
+    def __init__(self, length: int, offset: Optional[int]):
+        self.length = length
+        self.offset = offset
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return '(offset: {}, length: {})'.format(self.offset, self.length)
+
+
+def parse_data_runs(data, offset) -> Tuple[int, List[DataRun]]:
+    drs: List[DataRun] = []
     while data[offset] != 0:
-        print(offset, hex(data[offset]), data_runs)
         header = data[offset]
-        nlength = header >> 4
-        noffset = header & 0x0F
 
-        data_runs.append((int.from_bytes(data[offset+1:offset+1+nlength], byteorder='big'),
-                          int.from_bytes(data[offset+1+nlength:offset+1+nlength+noffset], byteorder='big')))
+        nlength = header & 0x0F
 
+        l = int.from_bytes(data[offset+1:offset+1+nlength], byteorder='little')
+        noffset = header >> 4
+        if noffset == 0:
+            o = None
+        else:
+            o = int.from_bytes(data[offset+1+nlength:offset+1+nlength + noffset],
+                               byteorder='little', signed=True)
+
+        drs.append(DataRun(l, o))
         offset += 1 + nlength + noffset
 
+    total_offset = 0
+    for i in range(0, len(drs)):
+        if drs[i].offset:
+            o = cast(int, drs[i].offset)
+            total_offset += o
+            drs[i].offset = total_offset
+
     offset += 1
-    return offset, data_runs
+    return offset, drs
 
 
 class MFTAttr(object):

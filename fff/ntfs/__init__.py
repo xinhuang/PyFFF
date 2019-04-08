@@ -1,6 +1,6 @@
 from .mft_entry import MFTEntry
 from .boot_sector import BootSector
-from . import mft_attr
+from .mft_attr import *
 
 
 from ..entity import Entity
@@ -10,7 +10,7 @@ from ..disk_view import DiskView
 from tabulate import tabulate
 
 import struct
-from typing import Optional, List, cast
+from typing import Optional, List, Iterable, cast
 
 
 class NTFS(Entity):
@@ -42,8 +42,9 @@ class NTFS(Entity):
     def cluster_size(self):
         return self.boot_sector.cluster_size
 
-    def read2(self, count: int, offset: int = 0, bsize: int = 1):
-        return self.dv.read(offset=offset * bsize, size=count * bsize)
+    # TODO:
+    def read2(self, size: int, offset: int) -> bytes:
+        return self.dv.read(offset=offset, size=size)
 
 
 class File(Entity):
@@ -53,29 +54,37 @@ class File(Entity):
         self.mft_entry = mft_entry
 
     def attr(self, **kwargs) -> Optional[MFTEntry]:
-        r = self._attrs(**kwargs)
+        r = self.attrs(**kwargs)
         return r[0] if r else None
 
-    def _attrs(self, name: Optional[str] = None, type_id: Optional[str] = None) -> List[MFTEntry]:
+    def attrs(self, name: Optional[str] = None, type_id: Optional[str] = None) -> List[MFTEntry]:
         if name:
             return list([a for a in self.mft_entry.attrs if a.name == name])
         if type_id:
             return list([a for a in self.mft_entry.attrs if a.type_s == type_id])
         return self.mft_entry.attrs
 
+    @property
+    def size(self):
+        return attr('$FILE_NAME').actual_size
+
+    @property
+    def size(self):
+        return attr('$FILE_NAME').allocated_size
+
     # TODO: Refactor the read interface in Entity
-    def read2(self, count: int, offset: int = 0, bsize: int = 1) -> bytes:
+    def read2(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
+        assert skip == 0, 'Skip is not supported yet'
         cluster_size = self.fs.cluster_size
-        assert bsize == 1 and count <= cluster_size
 
-        attr = self.attr(type_id='$DATA')
-        if attr:
-            data_attr = cast(mft_attr.Data, attr)
-            if attr and data_attr.data_runs:
-                length, offset = data_attr.data_runs[0]
-                return self.fs.read2(offset=offset * cluster_size, count=count, bsize=bsize)
-
-        return b''
+        bytes_left = count * bsize
+        attrs = self.attrs(type_id='$DATA')
+        data_attrs = cast(List[mft_attr.Data], attrs)
+        for dr in [dr for data_attr in data_attrs for dr in data_attr.data_runs]:
+            # length, offset = dr
+            to_read = min(bytes_left, dr.length * cluster_size)
+            bytes_left -= to_read
+            yield self.fs.read2(offset=dr.offset * self.fs.cluster_size, size=to_read)
 
 
 class MFT(File):
@@ -87,7 +96,7 @@ class MFT(File):
 
 
 def try_get(disk: DiskView, sector0: bytes, parent) -> Optional[NTFS]:
-    if sector0[3:11] == BootSector.SIGNATURE:
+    if sector0[3: 11] == BootSector.SIGNATURE:
         return NTFS(disk, sector0, parent)
     else:
         return None
