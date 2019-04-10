@@ -53,11 +53,11 @@ class File(Entity):
         self.fs = filesystem
         self.mft_entry = mft_entry
 
-    def attr(self, **kwargs) -> Optional[MFTEntry]:
+    def attr(self, **kwargs) -> Optional[MFTAttr]:
         r = self.attrs(**kwargs)
         return r[0] if r else None
 
-    def attrs(self, name: Optional[str] = None, type_id: Optional[str] = None) -> List[MFTEntry]:
+    def attrs(self, name: Optional[str] = None, type_id: Optional[str] = None) -> List[MFTAttr]:
         if name:
             return list([a for a in self.mft_entry.attrs if a.name == name])
         if type_id:
@@ -65,12 +65,19 @@ class File(Entity):
         return self.mft_entry.attrs
 
     @property
-    def size(self):
-        return attr('$FILE_NAME').actual_size
+    def name(self) -> str:
+        attr = cast(mft_attr.FileName, self.attr(type_id='$FILE_NAME'))
+        return attr.filename if attr is not None else ''
 
     @property
-    def size(self):
-        return attr('$FILE_NAME').allocated_size
+    def size(self) -> int:
+        das = self.attrs(type_id='$DATA')
+        return sum([da.actual_size for da in das])
+
+    @property
+    def allocated_size(self) -> int:
+        das = self.attrs(type_id='$DATA')
+        return sum([da.allocated_size for da in das])
 
     # TODO: Refactor the read interface in Entity
     def read2(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
@@ -86,13 +93,43 @@ class File(Entity):
             bytes_left -= to_read
             yield self.fs.read2(offset=dr.offset * self.fs.cluster_size, size=to_read)
 
+    def tabulate(self) -> List[Sequence[Any]]:
+        return [['File Name', self.name],
+                ['inode', self.mft_entry.inode],
+                ['Size', self.size],
+                ['Allocated Size', self.allocated_size], ]
+
+    def __str__(self):
+        return tabulate(self.tabulate())
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class MFT(File):
     def __init__(self, filesystem: NTFS, data: bytes):
-        mft_entry = MFTEntry(data, filesystem)
+        mft_entry = MFTEntry(data, filesystem, 0)
         File.__init__(self, mft_entry, filesystem)
 
-        self.mft_entries = [self.mft_entry]
+        self.mft_entries = {0: self.mft_entry}
+
+    def find(self, name: Optional[str] = None, inode: Optional[int] = None) -> Optional[File]:
+        bs = self.fs.cluster_size
+        data = b''.join(self.read2(count=self.size))
+        if name is not None:
+            for i in range(1, len(data) // bs):
+                e = MFTEntry(data[i*bs:(i+1)*bs], self.fs, i)
+                self.mft_entries[i] = e
+                f = File(e, self.fs)
+                if f.name == name:
+                    return f
+        elif inode is not None:
+            if inode >= len(data) // bs:
+                raise Exception('inode too large')
+            e = MFTEntry(data[inode*bs:(inode+1)*bs], self.fs, inode)
+            self.mft_entries[inode] = e
+            return File(e, self.fs)
+        return None
 
 
 def try_get(disk: DiskView, sector0: bytes, parent) -> Optional[NTFS]:

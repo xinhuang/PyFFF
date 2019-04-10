@@ -94,6 +94,11 @@ class MFTAttr(object):
             (self.padding, self.allocated_size, self.actual_size, self.compressed_size) = struct.unpack(
                 '<IQQQ', data[offset+0x24:offset+0x40])
             _, self.data_runs = parse_data_runs(data, offset + self.offset_dataruns)
+        else:
+            self.allocated_size = 0
+            self.actual_size = 0
+            self.compressed_size = 0
+            self.data_runs = []
 
     @property
     def compressed(self) -> bool:
@@ -108,7 +113,9 @@ class MFTAttr(object):
                                   ['Name', self.name],
                                   ['Size', self.size],
                                   ['Non-Resident Flag', '{} ({})'.format(self.non_resident,
-                                                                         'Non-Resident' if self.non_resident else 'Resident')],
+                                                                         'Non-Resident'
+                                                                         if self.non_resident
+                                                                         else 'Resident')],
                                   ['Name Length', self.name_length],
                                   ['Name Offset', self.name_offset],
                                   ['Flags', bin(self.flags)],
@@ -289,7 +296,8 @@ class FileName(MFTAttr):
             ['ER', self.er],
             ['Name Length', self.name_length],
             ['Namespace', self.namespace_s],
-            ['File Name', self.filename], ]
+            ['File Name', self.filename],
+            ['Parent Dir', self.parent_dir], ]
 
 
 @MFTAttribute(0x080, '$DATA')
@@ -307,3 +315,32 @@ class Data(MFTAttr):
         return super().tabulate() + [
             ['Data', self.data.hex() if self.data else 'None']
         ]
+
+
+class IndexNodeHeader(object):
+    def __init__(self, data: bytes):
+        (self.offset, self.total_size, self.allocated_size, self.flag) = struct.unpack('<IIIB', data)
+
+    def tabulate(self):
+        return [['Offset to First Entry', self.offset],
+                ['Size of Entries', self.total_size],
+                ['Allocated Size', self.allocated_size],
+                ['Flag', self.flag], ]
+
+
+@MFTAttribute(0x90, '$INDEX_ROOT')
+class IndexRoot(MFTAttr):
+    def __init__(self, data: bytes, offset: int, filesystem):
+        super().__init__(data, offset, filesystem)
+        (self.attr_type, self.collation_rule, self.bytes_per_index_record,
+         self.cluster_per_index_record) = struct.unpack('<IIIB', data[offset:offset+13])
+
+        self.index_node_header = IndexNodeHeader(data[offset+16:offset+29])
+
+    def tabulate(self):
+        return super().tabulate() + [
+            ['Attribute Type', self.attr_type],
+            ['Collation Rule', self.collation_rule],
+            ['Bytes per Index Record', self.bytes_per_index_record],
+            ['Cluster per Index Record', self.cluster_per_file_record_segment]] + \
+            self.index_note_header.tabulate()

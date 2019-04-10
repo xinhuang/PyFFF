@@ -6,9 +6,11 @@ import struct
 
 
 class MFTEntry(object):
-    def __init__(self, data, filesystem):
+    def __init__(self, data, filesystem, inode: int):
         self.data = data
         self.fs = filesystem
+
+        self.inode = inode
 
         self.sig = data[0:4]
         self.offset_fixup = struct.unpack('<H', data[4:6])[0]
@@ -37,7 +39,8 @@ class MFTEntry(object):
         return self._attrs
 
     def tabulate(self):
-        return [['Signature', '{}({})'.format(self.sig.decode(), self.sig.hex())],
+        return [['inode', self.inode],
+                ['Signature', '{}({})'.format(self.sig.decode(), self.sig.hex())],
                 ['Offset to Fixup', self.offset_fixup],
                 ['Entry Count in Fixup Array', self.fixup_entry_count],
                 ['$LogFile Sequence Number', self.lsn],
