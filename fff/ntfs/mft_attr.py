@@ -110,7 +110,7 @@ class MFTAttr(object):
 
     def tabulate(self) -> List[Sequence[Any]]:
         r: List[Sequence[Any]] = [('Type ID', '{} ({})'.format(self.type_id, self.type_s)),
-                                  ['Name', self.name],
+                                  ['Name', '{} ({})'.format(self.name.decode(), self.name)],
                                   ['Size', self.size],
                                   ['Non-Resident Flag', '{} ({})'.format(self.non_resident,
                                                                          'Non-Resident'
@@ -133,8 +133,7 @@ class MFTAttr(object):
         return r
 
     def __str__(self):
-        return tabulate(self.tabulate(),
-                        headers=['Field', 'Value'])
+        return tabulate(self.tabulate())
 
     def __repr__(self):
         return self.__str__()
@@ -342,5 +341,5 @@ class IndexRoot(MFTAttr):
             ['Attribute Type', self.attr_type],
             ['Collation Rule', self.collation_rule],
             ['Bytes per Index Record', self.bytes_per_index_record],
-            ['Cluster per Index Record', self.cluster_per_file_record_segment]] + \
-            self.index_note_header.tabulate()
+            ['Cluster per Index Record', self.cluster_per_index_record]] + \
+            self.index_node_header.tabulate()

@@ -141,3 +141,6 @@ class NTFSTests(TestCase):
         self.assertIsNotNone(actual)
         self.assertEqual(4655616, actual.size)
         self.assertEqual(4656128, actual.allocated_size)
+
+    def test_get_root_directory_tabulate(self):
+        self.sut.mft.find(inode=5).tabulate()
