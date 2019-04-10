@@ -134,3 +134,10 @@ class NTFSTests(TestCase):
 
         self.assertEqual('FILE0', actual0)
         self.assertEqual('FILE0', actual1)
+
+    def test_get_file_size_inode_200(self):
+        actual = self.sut.mft.find(inode=200)
+
+        self.assertIsNotNone(actual)
+        self.assertEqual(4655616, actual.size)
+        self.assertEqual(4656128, actual.allocated_size)

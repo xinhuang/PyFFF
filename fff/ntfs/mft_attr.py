@@ -313,7 +313,7 @@ class Data(MFTAttr):
 
     def tabulate(self):
         return super().tabulate() + [
-            ['Data', self.data.hex() if self.data else 'None']
+            ['Resident Data', self.data.hex() if self.data else 'None']
         ]
 
 
