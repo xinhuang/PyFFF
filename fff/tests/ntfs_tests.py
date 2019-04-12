@@ -144,3 +144,8 @@ class NTFSTests(TestCase):
 
     def test_get_root_directory_tabulate(self):
         self.sut.mft.find(inode=5).tabulate()
+
+    def test_root_dir_IndexRoot_child_vcn(self):
+        root = self.sut.mft.find(inode=5)
+
+        self.assertEqual(0, root.attr(type_id='$INDEX_ROOT').entries[0].child_vcn)

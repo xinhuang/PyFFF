@@ -32,7 +32,7 @@ class MFTEntry(object):
             self._attrs = []
             offset = self.attr_offset
             while self.data[offset:offset+4] != b'\xFF' * 4:
-                attr = mft_attr.create(self.data, offset, self.fs)
+                attr = mft_attr.create(self.data, offset)
                 self._attrs.append(attr)
                 offset += attr.size
 

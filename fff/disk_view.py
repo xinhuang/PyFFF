@@ -12,7 +12,7 @@ class DiskView(object):
     def size(self):
         return self.end - self.begin
 
-    def seek(self, offset):
+    def _seek(self, offset):
         location = self.begin + offset
 
         assert location >= self.begin and location < self.end
@@ -20,7 +20,7 @@ class DiskView(object):
 
     def read(self, size, offset=None):
         if offset is not None:
-            self.seek(offset)
+            self._seek(offset)
         assert self.disk.tell() + size - 1 < self.end
         return self.disk.read(size)
 

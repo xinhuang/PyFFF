@@ -33,6 +33,8 @@ PARTITION_TYPES = {
     0x83: 'Linux native partition',
 
     0x85: 'Linux extended partition',
+
+    0xFD: 'Linux raid autodetect',
 }
 
 
@@ -99,8 +101,7 @@ class Partition(Entity):
         return filesystem.get_filesystem(self.dv, self)
 
     def read(self, offset, size):
-        self.dv.seek(offset)
-        return self.dv.read(size)
+        return self.dv.read(size, offset=offset)
 
     @property
     def entities(self):
