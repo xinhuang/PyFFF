@@ -55,7 +55,6 @@ class Partition(Entity):
         self.data = data
         self.number = number
         self.parent = parent
-        self.dv: Optional[DiskView] = None
 
         self.bootable_flag = struct.unpack('<B', data[0:1])[0]
         self.partition_type = struct.unpack('<B', data[4:5])[0]
@@ -73,7 +72,10 @@ class Partition(Entity):
         self.size = sector_count * self.sector_size
 
         self.ebr: Optional[Entity] = None
-        self.sectors = DataUnits(self, self.sector_size, sector_count)
+
+        self.dv = DiskView(parent.dv.disk, self.first_sector*self.sector_size,
+                           self.size, sector_size=self.sector_size)
+        self.sectors = self.dv.sectors
 
     @property
     def is_bootable(self):

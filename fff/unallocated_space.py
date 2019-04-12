@@ -1,5 +1,6 @@
 from .entity import Entity
 from .data_units import DataUnits
+from .disk_view import DiskView
 
 
 class UnallocatedSpace(Entity):
@@ -11,8 +12,11 @@ class UnallocatedSpace(Entity):
         self.parent = parent
         self.first_sector = first_sector
         self.last_sector = last_sector
+        self.dv = DiskView(parent.dv.disk, begin=self.first_sector*self.sector_size,
+                           size=sector_count*self.sector_size,
+                           sector_size=self.sector_size)
 
-        self.sectors = DataUnits(self, self.sector_size, sector_count)
+        self.sectors = self.dv.sectors
 
     @property
     def sector_size(self):

@@ -47,7 +47,6 @@ class MBR(Entity):
         for i in range(4):
             s = slices[i]
             p = Partition(data[s], number=i, parent=self)
-            p.dv = DiskView(self.dv.disk, p.first_sector * self.sector_size, p.size)
             if p.partition_type == 0:
                 self.unused_entries.append(p)
             else:

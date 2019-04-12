@@ -1,5 +1,11 @@
+from . import data_units as du
+
+from typing import Optional
+
+
 class DiskView(object):
-    def __init__(self, disk, begin, size):
+    def __init__(self, disk, begin: int, size: int,
+                 sector_size: Optional[int] = None, cluster_size: Optional[int] = None):
         assert not isinstance(disk, DiskView)
 
         self.disk = disk
@@ -7,6 +13,15 @@ class DiskView(object):
         self.end = begin + size
 
         assert self.begin <= self.end
+        assert sector_size is None or sector_size > 0
+        assert cluster_size is None or cluster_size > 0
+
+        if sector_size is not None:
+            self.sector_size = sector_size
+            self.sectors = du.DataUnits(self, sector_size, self.size // sector_size)
+        if cluster_size is not None:
+            self.cluster_size = cluster_size
+            self.clusters = du.DataUnits(self, cluster_size, self.size // cluster_size)
 
     @property
     def size(self):

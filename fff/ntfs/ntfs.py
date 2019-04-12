@@ -10,18 +10,16 @@ class NTFS(Entity):
     def __init__(self, dv: DiskView, sector0: bytes, parent):
         Entity.__init__(self)
         self.boot_sector = BootSector(sector0)
-        self.dv = dv
+        bs = self.boot_sector
+        self.dv = DiskView(dv.disk, dv.begin, dv.size,
+                           sector_size=self.sector_size,
+                           cluster_size=self.cluster_size)
 
         self.fs_type = 'NTFS'
 
-        bs = self.boot_sector
+        self.sectors = self.dv.sectors
 
-        self.sectors = DataUnits(self, bs.bytes_per_sector,
-                                 dv.size // bs.bytes_per_sector)
-
-        cluster_size = self.sector_size * bs.sectors_per_cluster
-        cluster_count = bs.total_sectors // bs.sectors_per_cluster
-        self.clusters = DataUnits(self, cluster_size, cluster_count)
+        self.clusters = self.dv.clusters
 
         i = self.boot_sector.mft_cluster_number
         n = self.boot_sector.cluster_per_file_record_segment
