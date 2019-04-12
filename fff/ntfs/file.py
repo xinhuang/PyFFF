@@ -11,7 +11,7 @@ from typing import Optional, cast, List, Iterable, Sequence, Any
 class File(Entity):
     def __init__(self, mft_entry: MFTEntry, filesystem):
         Entity.__init__(self)
-        self.fs = mft_entry.fs
+        self.fs = filesystem
         self.mft_entry = mft_entry
 
     def attr(self, **kwargs) -> Optional[MFTAttr]:

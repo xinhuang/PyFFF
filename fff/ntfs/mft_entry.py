@@ -1,4 +1,5 @@
 from . import mft_attr
+from ..disk_view import DiskView
 
 from tabulate import tabulate
 
@@ -6,9 +7,8 @@ import struct
 
 
 class MFTEntry(object):
-    def __init__(self, data, filesystem, inode: int):
+    def __init__(self, data, dv: DiskView, inode: int):
         self.data = data
-        self.fs = filesystem
 
         self.inode = inode
 
