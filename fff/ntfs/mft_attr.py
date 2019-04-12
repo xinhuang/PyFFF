@@ -1,3 +1,5 @@
+from ..disk_view import DiskView
+
 from tabulate import tabulate
 
 import struct
@@ -145,14 +147,14 @@ class MFTAttr(object):
 factory: Dict[int, Callable[..., MFTAttr]] = {}
 
 
-def create(data, offset) -> MFTAttr:
+def create(dv, data, offset) -> MFTAttr:
     type_id = struct.unpack('<I', data[offset:offset+4])[0]
     ctor = factory.get(type_id)
 
     if ctor is None:
         return MFTAttr(data, offset)
     else:
-        return ctor(data, offset)
+        return ctor(dv, data, offset)
 
 
 def MFTAttribute(type_id, name):
@@ -186,7 +188,7 @@ DOS_PERM = {
 @MFTAttribute(0x010, '$STANDARD_INFORMATION')
 class StandardInformation(MFTAttr):
 
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         # TODO: Non-resident flag
@@ -253,7 +255,7 @@ FLAGS = {
 
 @MFTAttribute(0x030, '$FILE_NAME')
 class FileName(MFTAttr):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         assert not self.non_resident
@@ -304,7 +306,7 @@ class FileName(MFTAttr):
 
 @MFTAttribute(0x080, '$DATA')
 class Data(MFTAttr):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         if self.non_resident:
@@ -382,11 +384,11 @@ class IndexEntry(object):
 
 
 class IndexEntryFileName(IndexEntry):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         of = offset + IndexEntry.SIZE
         if not self.is_last:
-            self.filename = FileName(data[of:of+self.content_size], 0)
+            self.filename = FileName(dv, data[of:of+self.content_size], 0)
         if self.child_exists:
             self.child_vcn = int.from_bytes(
                 data[offset+self.size-8:offset+self.size], byteorder='little')
@@ -399,7 +401,7 @@ class IndexEntryFileName(IndexEntry):
 
 @MFTAttribute(0x90, '$INDEX_ROOT')
 class IndexRoot(MFTAttr):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         offset += self.attr_offset
         (self.attr_type, self.collation_rule, self.bytes_per_index_record,
@@ -410,10 +412,10 @@ class IndexRoot(MFTAttr):
         self.entries: List[IndexEntry] = []
         if self.attr_type == 0x30:
             offset = offset + 16 + self.index_node_header.offset
-            self.entries.append(IndexEntryFileName(data, offset))
+            self.entries.append(IndexEntryFileName(dv, data, offset))
             while not self.entries[-1].is_last:
                 offset += self.entries[-1].size
-                self.entries.append(IndexEntryFileName(data, offset))
+                self.entries.append(IndexEntryFileName(dv, data, offset))
 
     def tabulate(self):
         r = (super().tabulate() +
@@ -429,7 +431,7 @@ class IndexRoot(MFTAttr):
 
 @MFTAttribute(0x0B0, '$BITMAP')
 class Bitmap(MFTAttr):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         if not self.non_resident:
             offset += self.attr_offset
@@ -446,6 +448,6 @@ class Bitmap(MFTAttr):
 
 @MFTAttribute(0x0A0, '$INDEX_ALLOCATION')
 class IndexAllocation(MFTAttr):
-    def __init__(self, data: bytes, offset: int):
+    def __init__(self, dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         assert self.non_resident

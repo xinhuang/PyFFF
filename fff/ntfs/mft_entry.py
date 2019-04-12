@@ -1,9 +1,10 @@
-from . import mft_attr
+from .mft_attr import MFTAttr, create
 from ..disk_view import DiskView
 
 from tabulate import tabulate
 
 import struct
+from typing import List
 
 
 class MFTEntry(object):
@@ -24,19 +25,13 @@ class MFTEntry(object):
         self.alloc_size = struct.unpack('<I', data[28:32])[0]
         self.base_ref = struct.unpack('<Q', data[32:40])[0]
         self.next_attr_id = struct.unpack('<H', data[40:42])[0]
-        self._attrs = None
 
-    @property
-    def attrs(self):
-        if self._attrs is None:
-            self._attrs = []
-            offset = self.attr_offset
-            while self.data[offset:offset+4] != b'\xFF' * 4:
-                attr = mft_attr.create(self.data, offset)
-                self._attrs.append(attr)
-                offset += attr.size
-
-        return self._attrs
+        self.attrs: List[MFTAttr] = []
+        offset = self.attr_offset
+        while self.data[offset:offset+4] != b'\xFF' * 4:
+            attr = create(dv, self.data, offset)
+            self.attrs.append(attr)
+            offset += attr.size
 
     def tabulate(self):
         return [['inode', self.inode],
