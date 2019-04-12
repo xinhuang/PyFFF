@@ -9,7 +9,7 @@ class MFT(File):
         mft_entry = MFTEntry(data, filesystem.dv, 0)
         File.__init__(self, mft_entry, filesystem)
 
-        self.mft_entries = {0: self.mft_entry}
+        self.entries = {0: self.mft_entry}
         self._data = None
 
     @property
@@ -24,7 +24,7 @@ class MFT(File):
         if name is not None:
             for i in range(1, len(data) // bs):
                 e = MFTEntry(data[i*bs:(i+1)*bs], self.fs, i)
-                self.mft_entries[i] = e
+                self.entries[i] = e
                 f = File(e, self.fs)
                 if f.name == name:
                     return f
@@ -32,6 +32,6 @@ class MFT(File):
             if inode >= len(data) // bs:
                 raise Exception('inode too large')
             e = MFTEntry(data[inode*bs:(inode+1)*bs], self.fs, inode)
-            self.mft_entries[inode] = e
+            self.entries[inode] = e
             return File(e, self.fs)
         return None
