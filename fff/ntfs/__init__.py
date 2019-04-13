@@ -4,6 +4,7 @@ from .mft_attr import *
 from .mft import *
 from .file import *
 from .ntfs import *
+from .vcn import *
 
 from typing import Optional
 

@@ -4,7 +4,7 @@ from ..disk_view import DiskView
 from tabulate import tabulate
 
 import struct
-from typing import List
+from typing import List, Union, Optional
 
 
 class MFTEntry(object):
@@ -26,12 +26,22 @@ class MFTEntry(object):
         self.base_ref = struct.unpack('<Q', data[32:40])[0]
         self.next_attr_id = struct.unpack('<H', data[40:42])[0]
 
-        self.attrs: List[MFTAttr] = []
+        self._attrs: List[MFTAttr] = []
         offset = self.attr_offset
         while self.data[offset:offset+4] != b'\xFF' * 4:
-            attr = create(dv, self.data, offset)
-            self.attrs.append(attr)
+            attr = create(self, dv, self.data, offset)
+            self._attrs.append(attr)
             offset += attr.size
+
+    def attrs(self, type_id: Union[int, str, None] = None, name: Optional[str] = None):
+        r = self._attrs
+        if isinstance(type_id, str):
+            r = [a for a in self._attrs if a.type_s == type_id]
+        elif isinstance(type_id, int):
+            r = [a for a in self._attrs if a.type_id == type_id]
+        if name is not None:
+            r = [a for a in r if a.name.decode() == name]
+        return list(r)
 
     def tabulate(self):
         return [['inode', self.inode],
@@ -47,7 +57,7 @@ class MFTEntry(object):
                 ['Allocated Size of MFT Entry', self.alloc_size],
                 ['File Reference to Base Record', self.base_ref],
                 ['Next Attribute ID', self.next_attr_id],
-                ['#attributes', len(self.attrs)], ]
+                ['#attributes', len(self._attrs)], ]
 
     def __str__(self):
         return tabulate(self.tabulate(),

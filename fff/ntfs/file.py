@@ -19,11 +19,7 @@ class File(Entity):
         return r[0] if r else None
 
     def attrs(self, name: Optional[str] = None, type_id: Optional[str] = None) -> List[MFTAttr]:
-        if name:
-            return list([a for a in self.mft_entry.attrs if a.name == name])
-        if type_id:
-            return list([a for a in self.mft_entry.attrs if a.type_s == type_id])
-        return self.mft_entry.attrs
+        return self.mft_entry.attrs(name=name, type_id=type_id)
 
     @property
     def name(self) -> str:

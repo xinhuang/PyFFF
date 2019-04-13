@@ -1,9 +1,13 @@
+from .vcn import parse_data_runs
 from ..disk_view import DiskView
 
 from tabulate import tabulate
 
 import struct
-from typing import List, Any, Callable, Dict, Sequence, Tuple, Optional, cast
+from typing import List, Any, Callable, Dict, Sequence, Tuple, Optional, cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .mft_entry import MFTEntry
 
 
 # http://www.cse.scu.edu/~tschwarz/coen252_07Fall/Lectures/NTFS.html
@@ -25,47 +29,6 @@ TYPES: Dict[int, str] = {
     0x0F0: '$PROPERTY_SET',
     0x100: '$LOGGED_UTILITY_STREAM',
 }
-
-
-class DataRun(object):
-    def __init__(self, length: int, offset: Optional[int]):
-        self.length = length
-        self.offset = offset
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return '(offset: {}, length: {})'.format(self.offset, self.length)
-
-
-def parse_data_runs(data, offset) -> Tuple[int, List[DataRun]]:
-    drs: List[DataRun] = []
-    while data[offset] != 0:
-        header = data[offset]
-
-        nlength = header & 0x0F
-
-        l = int.from_bytes(data[offset+1:offset+1+nlength], byteorder='little')
-        noffset = header >> 4
-        if noffset == 0:
-            o = None
-        else:
-            o = int.from_bytes(data[offset+1+nlength:offset+1+nlength + noffset],
-                               byteorder='little', signed=True)
-
-        drs.append(DataRun(l, o))
-        offset += 1 + nlength + noffset
-
-    total_offset = 0
-    for i in range(0, len(drs)):
-        if drs[i].offset:
-            o = cast(int, drs[i].offset)
-            total_offset += o
-            drs[i].offset = total_offset
-
-    offset += 1
-    return offset, drs
 
 
 class MFTAttr(object):
@@ -147,14 +110,14 @@ class MFTAttr(object):
 factory: Dict[int, Callable[..., MFTAttr]] = {}
 
 
-def create(dv, data, offset) -> MFTAttr:
+def create(entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int) -> MFTAttr:
     type_id = struct.unpack('<I', data[offset:offset+4])[0]
     ctor = factory.get(type_id)
 
     if ctor is None:
         return MFTAttr(data, offset)
     else:
-        return ctor(dv, data, offset)
+        return ctor(entry, dv, data, offset)
 
 
 def MFTAttribute(type_id, name):
@@ -188,7 +151,7 @@ DOS_PERM = {
 @MFTAttribute(0x010, '$STANDARD_INFORMATION')
 class StandardInformation(MFTAttr):
 
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         # TODO: Non-resident flag
@@ -255,7 +218,7 @@ FLAGS = {
 
 @MFTAttribute(0x030, '$FILE_NAME')
 class FileName(MFTAttr):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         assert not self.non_resident
@@ -306,7 +269,7 @@ class FileName(MFTAttr):
 
 @MFTAttribute(0x080, '$DATA')
 class Data(MFTAttr):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
 
         if self.non_resident:
@@ -322,6 +285,8 @@ class Data(MFTAttr):
 
 
 class IndexNodeHeader(object):
+    SIZE = 16
+
     def __init__(self, data: bytes):
         (self.offset, self.total_size, self.allocated_size, self.flag) = struct.unpack('<IIIB', data)
 
@@ -384,11 +349,11 @@ class IndexEntry(object):
 
 
 class IndexEntryFileName(IndexEntry):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         of = offset + IndexEntry.SIZE
         if not self.is_last:
-            self.filename = FileName(dv, data[of:of+self.content_size], 0)
+            self.filename = FileName(entry, dv, data[of:of+self.content_size], 0)
         if self.child_exists:
             self.child_vcn = int.from_bytes(
                 data[offset+self.size-8:offset+self.size], byteorder='little')
@@ -401,7 +366,7 @@ class IndexEntryFileName(IndexEntry):
 
 @MFTAttribute(0x90, '$INDEX_ROOT')
 class IndexRoot(MFTAttr):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         offset += self.attr_offset
         (self.attr_type, self.collation_rule, self.bytes_per_index_record,
@@ -412,10 +377,10 @@ class IndexRoot(MFTAttr):
         self.entries: List[IndexEntry] = []
         if self.attr_type == 0x30:
             offset = offset + 16 + self.index_node_header.offset
-            self.entries.append(IndexEntryFileName(dv, data, offset))
+            self.entries.append(IndexEntryFileName(entry, dv, data, offset))
             while not self.entries[-1].is_last:
                 offset += self.entries[-1].size
-                self.entries.append(IndexEntryFileName(dv, data, offset))
+                self.entries.append(IndexEntryFileName(entry, dv, data, offset))
 
     def tabulate(self):
         r = (super().tabulate() +
@@ -429,9 +394,39 @@ class IndexRoot(MFTAttr):
         return r
 
 
+class IndexRecord(object):
+    pass
+
+
+@MFTAttribute(0x0A0, '$INDEX_ALLOCATION')
+class IndexAllocation(MFTAttr):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
+        super().__init__(data, offset)
+        assert self.non_resident
+
+        irs = entry.attrs(type_id=0x90)
+        assert len(irs) == 1
+        ir = irs[0]
+
+        self.records: Dict[int, IndexRecord] = {}
+        queue = list([e.child_vcn for e in ir.entries if e.child_exists])
+        while queue:
+            vcn = queue.pop()
+            # for dr in self.data_runs:
+            # assert dr.offset is not None
+            # data = dv.clusters[dr.offset: dr.offset+dr.length]
+            # self.signature = data[: 4]
+            # (self.fixup_offset, self.fixup_entry_count, self.lsn,
+            # self.vcn) = struct.unpack('<HHQQ', data[4:24])
+
+    def tabulate(self):
+        return (super().tabulate() +
+                [['#IndexRecords', len(self.records)]])
+
+
 @MFTAttribute(0x0B0, '$BITMAP')
 class Bitmap(MFTAttr):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
         super().__init__(data, offset)
         if not self.non_resident:
             offset += self.attr_offset
@@ -444,10 +439,3 @@ class Bitmap(MFTAttr):
         # TODO: convert bytes to bitmap
         import PIL.Image
         return PIL.Image.fromarray(self.data)
-
-
-@MFTAttribute(0x0A0, '$INDEX_ALLOCATION')
-class IndexAllocation(MFTAttr):
-    def __init__(self, dv: DiskView, data: bytes, offset: int):
-        super().__init__(data, offset)
-        assert self.non_resident
