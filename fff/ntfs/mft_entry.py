@@ -43,6 +43,16 @@ class MFTEntry(object):
             r = [a for a in r if a.name.decode() == name]
         return list(r)
 
+    @property
+    def flags_s(self):
+        FLAGS = {
+            0x00: 'Not in use',
+            0x01: 'In use',
+            0x02: 'Directory',
+            0x03: 'Directory in use',
+        }
+        return FLAGS.get(self.flags_s)
+
     def tabulate(self):
         return [['inode', self.inode],
                 ['Signature', '{}({})'.format(self.sig.decode(), self.sig.hex())],
@@ -52,7 +62,7 @@ class MFTEntry(object):
                 ['Sequence Number', self.seq],
                 ['Link Count', self.link_count],
                 ['Attribute Offset', self.attr_offset],
-                ['Flags', bin(self.flags)],
+                ['Flags', bin(self.flags_s)],
                 ['Used Size of MFT Entry', self.used_size],
                 ['Allocated Size of MFT Entry', self.alloc_size],
                 ['File Reference to Base Record', self.base_ref],
@@ -60,8 +70,7 @@ class MFTEntry(object):
                 ['#attributes', len(self._attrs)], ]
 
     def __str__(self):
-        return tabulate(self.tabulate(),
-                        headers=['Field', 'Value'])
+        return tabulate(self.tabulate())
 
     def __repr__(self):
         return self.__str__()
