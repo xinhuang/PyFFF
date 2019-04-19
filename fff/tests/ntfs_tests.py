@@ -1,7 +1,8 @@
+import fff
+
 from unittest import TestCase
 import hashlib
-
-import fff
+import datetime
 
 
 class NTFSTests(TestCase):
@@ -35,11 +36,12 @@ class NTFSTests(TestCase):
 
     def test_tabulate_StandardInformation(self):
         sut = self.sut.mft.mft_entry.attrs(type_id=0x10)[0]
+        expect = datetime.datetime(1970, 1, 1)
 
-        self.assertEqual(116444736000000000, sut.ctime)
-        self.assertEqual(116444736000000000, sut.atime)
-        self.assertEqual(116444736000000000, sut.mtime)
-        self.assertEqual(116444736000000000, sut.rtime)
+        self.assertEqual(expect, sut.ctime)
+        self.assertEqual(expect, sut.atime)
+        self.assertEqual(expect, sut.mtime)
+        self.assertEqual(expect, sut.rtime)
         self.assertEqual(0x6, sut.perm)
 
         sut.tabulate()
@@ -57,9 +59,9 @@ class NTFSTests(TestCase):
     def test_MFT_data_runs(self):
         data_attr = self.sut.mft.attr(type_id='$DATA')
 
-        self.assertEqual(1, len(data_attr.data_runs))
-        self.assertEqual(251, data_attr.data_runs[0].length)
-        self.assertEqual(16, data_attr.data_runs[0].offset)
+        self.assertEqual(1, len(data_attr.vcn.drs))
+        self.assertEqual(251, data_attr.vcn.drs[0].length)
+        self.assertEqual(16, data_attr.vcn.drs[0].offset)
 
     def test_read_mft_first_5_bytes(self):
         actual0 = next(self.sut.mft.read2(skip=0, bsize=1, count=5)).decode()

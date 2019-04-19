@@ -14,10 +14,17 @@ class DataRun(object):
 
 
 class VCN(object):
-    def __init__(self, data: bytes, offset: int = 0):
-        _, self.drs = parse_data_runs(data, offset)
-        self.count = sum([dr.length for dr in self.drs])
-        self.clusters = list([c for dr in self.drs for c in self._expand(dr)])
+    def __init__(self, data: Optional[bytes] = None, offset: int = 0):
+        self.drs: List[DataRun]
+        self.clusters: List[int]
+        if data is None:
+            self.drs = []
+            self.count = 0
+            self.clusters = []
+        else:
+            _, self.drs = parse_data_runs(data, offset)
+            self.count = sum([dr.length for dr in self.drs])
+            self.clusters = list([c for dr in self.drs for c in self._expand(dr)])
 
     def _expand(self, dr: DataRun):
         if dr.offset is None:
@@ -27,6 +34,12 @@ class VCN(object):
 
     def __getitem__(self, index_or_slice):
         return self.clusters[index_or_slice]
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return '<VCN: {} data runs>'.format(self.count)
 
 
 def parse_data_runs(data, offset) -> Tuple[int, List[DataRun]]:

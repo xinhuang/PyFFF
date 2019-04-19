@@ -44,7 +44,7 @@ class File(Entity):
         bytes_left = count * bsize
         attrs = self.attrs(type_id='$DATA')
         data_attrs = cast(List[Data], attrs)
-        for dr in [dr for data_attr in data_attrs for dr in data_attr.data_runs]:
+        for dr in [dr for data_attr in data_attrs for dr in data_attr.vcn.drs]:
             # length, offset = dr
             to_read = min(bytes_left, dr.length * cluster_size)
             bytes_left -= to_read

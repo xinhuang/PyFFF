@@ -1,9 +1,11 @@
-from .vcn import parse_data_runs
+from .vcn import parse_data_runs, VCN
 from ..disk_view import DiskView
 
 from tabulate import tabulate
+from hexdump import hexdump
 
 import struct
+from datetime import datetime, timedelta
 from typing import List, Any, Callable, Dict, Sequence, Tuple, Optional, cast, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,12 +32,20 @@ TYPES: Dict[int, str] = {
     0x100: '$LOGGED_UTILITY_STREAM',
 }
 
+ORIGIN_TS = datetime(1601, 1, 1)
+
+
+def ntfs_time(ns: int) -> datetime:
+    elapsed = timedelta(microseconds=ns / 10)
+    return ORIGIN_TS + elapsed
+
 
 class MFTAttr(object):
     def __init__(self, data: bytes, offset: int):
         self.type_id = struct.unpack('<I', data[offset:offset+4])[0]
         self.size = struct.unpack('<I', data[offset+4:offset+8])[0]
-        assert offset + self.size <= len(data)
+        assert offset + self.size <= len(data), ('offset: {}, size: {}, len: {}'.format(
+            offset, self.size, len(data)))
         self.non_resident = bool(data[offset+8])
         self.name_length = data[offset+9]
         self.name_offset = struct.unpack('<H', data[offset+10:offset+12])[0]
@@ -55,14 +65,14 @@ class MFTAttr(object):
             self.compression_unit_size = struct.unpack('<H', data[offset+0x22:offset+0x24])[0]
             (self.padding, self.allocated_size, self.actual_size, self.compressed_size) = struct.unpack(
                 '<IQQQ', data[offset+0x24:offset+0x40])
-            _, self.data_runs = parse_data_runs(data, offset + self.offset_dataruns)
+            self.vcn = VCN(data, offset + self.offset_dataruns)
         else:
             (self.attr_length, self.attr_offset, self.index_flag,
              self.padding) = struct.unpack('<IHBB', data[offset+0x10:offset+0x18])
             self.allocated_size = 0
             self.actual_size = 0
             self.compressed_size = 0
-            self.data_runs = []
+            self.vcn = VCN()
 
     @property
     def compressed(self) -> bool:
@@ -92,7 +102,7 @@ class MFTAttr(object):
                   ('Allocated Size', self.allocated_size),
                   ('Actual Size', self.actual_size),
                   ('Compressed Size', self.compressed_size),
-                  ('#Data Runs', len(self.data_runs)), ]
+                  ('#Data Runs', self.vcn.count), ]
         else:
             r += [['Attribute ID', self.attr_id],
                   ['Attribute Offset', self.attr_offset],
@@ -115,9 +125,9 @@ def create(entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int) -> MFTAttr
     ctor = factory.get(type_id)
 
     if ctor is None:
-        return MFTAttr(data, offset)
+        return MFTAttr(data=data, offset=offset)
     else:
-        return ctor(entry, dv, data, offset)
+        return ctor(entry=entry, dv=dv, data=data, offset=offset)
 
 
 def MFTAttribute(type_id, name):
@@ -158,10 +168,10 @@ class StandardInformation(MFTAttr):
         assert not self.non_resident
 
         offset += 0x18
-        self.ctime = struct.unpack('<Q', data[offset:offset+8])[0]  # File creation
-        self.atime = struct.unpack('<Q', data[offset+8:offset+16])[0]  # File altered
-        self.mtime = struct.unpack('<Q', data[offset+16:offset+24])[0]  # MFT changed
-        self.rtime = struct.unpack('<Q', data[offset+24:offset+32])[0]  # File read
+        self.ctime = ntfs_time(struct.unpack('<Q', data[offset:offset+8])[0])  # File creation
+        self.atime = ntfs_time(struct.unpack('<Q', data[offset+8:offset+16])[0])  # File altered
+        self.mtime = ntfs_time(struct.unpack('<Q', data[offset+16:offset+24])[0])  # MFT changed
+        self.rtime = ntfs_time(struct.unpack('<Q', data[offset+24:offset+32])[0])  # File read
         self.perm = struct.unpack('<I', data[offset+32:offset+36])[0]
         self.max_ver = struct.unpack('<I', data[offset+36:offset+40])[0]
         self.ver = struct.unpack('<I', data[offset+40:offset+44])[0]
@@ -216,9 +226,55 @@ FLAGS = {
 }
 
 
+class FileNameHeader(object):
+    def __init__(self, data: bytes, offset: int, **kwargs):
+        super().__init__()
+
+        self.parent_dir = struct.unpack('<Q', data[offset:offset+8])[0]
+        self.ctime = struct.unpack('<Q', data[offset+8:offset+16])[0]  # File creation
+        self.atime = struct.unpack('<Q', data[offset+16:offset+24])[0]  # File altered
+        self.mtime = struct.unpack('<Q', data[offset+24:offset+32])[0]  # MFT changed
+        self.rtime = struct.unpack('<Q', data[offset+32:offset+40])[0]  # File read
+        self.allocated_size = struct.unpack('<Q', data[offset+40:offset+48])[0]
+        self.actual_size = struct.unpack('<Q', data[offset+48:offset+56])[0]
+        self.flags = struct.unpack('<I', data[offset+56:offset+60])[0]
+        self.er = struct.unpack('<I', data[offset+60:offset+64])[0]
+        self.name_length = struct.unpack('<B', data[offset+64:offset+65])[0]
+        self.namespace = struct.unpack('<B', data[offset+65:offset+66])[0]
+        self.filename = data[offset+66:offset+66+self.name_length*2].decode('utf-16')
+
+    @property
+    def flags_s(self) -> str:
+        s = hex(self.flags) + ' ('
+        for k in sorted(FLAGS.keys()):
+            if self.flags & k:
+                s += FLAGS[k] + ', '
+        s = s.rstrip(', ') + ')'
+        return s
+
+    @property
+    def namespace_s(self) -> str:
+        return '{} ({})'.format(self.namespace,
+                                NAMESPACE.get(self.namespace, 'Unrecognized'))
+
+    def tabulate(self):
+        return [['Created', self.ctime],
+                ['Modified', self.atime],
+                ['MFT Modified', self.mtime],
+                ['Accessed', self.rtime],
+                ['Allocated Size', self.allocated_size],
+                ['Actual Size', self.actual_size],
+                ['Flags', self.flags_s],
+                ['ER', self.er],
+                ['Name Length', self.name_length],
+                ['Namespace', self.namespace_s],
+                ['File Name', self.filename],
+                ['Parent Dir', self.parent_dir], ]
+
+
 @MFTAttribute(0x030, '$FILE_NAME')
 class FileName(MFTAttr):
-    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
+    def __init__(self, data: bytes, offset: int, **kwargs):
         super().__init__(data, offset)
 
         assert not self.non_resident
@@ -258,7 +314,7 @@ class FileName(MFTAttr):
             ['MFT Modified', self.mtime],
             ['Accessed', self.rtime],
             ['Allocated Size', self.allocated_size],
-            ['Actual Size', self.size],
+            ['Actual Size', self.actual_size],
             ['Flags', self.flags_s],
             ['ER', self.er],
             ['Name Length', self.name_length],
@@ -297,6 +353,12 @@ class IndexNodeHeader(object):
                 ['Size of Entries', self.total_size],
                 ['Allocated Size', self.allocated_size],
                 ['Flag', self.flag], ]
+
+    def __str__(self):
+        return tabulate(self.tabulate())
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class FileRef(object):
@@ -349,24 +411,26 @@ class IndexEntry(object):
 
 
 class IndexEntryFileName(IndexEntry):
-    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
+    def __init__(self, data: bytes, offset: int):
         super().__init__(data, offset)
         of = offset + IndexEntry.SIZE
         if not self.is_last:
-            self.filename = FileName(entry, dv, data[of:of+self.content_size], 0)
+            # FIXME: The stream doesn't contains an attr header
+            self.filename = FileNameHeader(data=data[of:of+self.content_size], offset=0)
         if self.child_exists:
             self.child_vcn = int.from_bytes(
                 data[offset+self.size-8:offset+self.size], byteorder='little')
 
     def tabulate(self):
-        return ([['Index Entry: FileName']] + super().tabulate() +
-                [['VCN of Child Node', self.child_vcn]] +
+        return ([['---', '---']] +
+                super().tabulate() +
+                ([['VCN of Child Node', self.child_vcn]] if self.child_exists else []) +
                 ([] if self.is_last else self.filename.tabulate()))
 
 
 @MFTAttribute(0x90, '$INDEX_ROOT')
 class IndexRoot(MFTAttr):
-    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int, **kwargs):
         super().__init__(data, offset)
         offset += self.attr_offset
         (self.attr_type, self.collation_rule, self.bytes_per_index_record,
@@ -377,10 +441,10 @@ class IndexRoot(MFTAttr):
         self.entries: List[IndexEntry] = []
         if self.attr_type == 0x30:
             offset = offset + 16 + self.index_node_header.offset
-            self.entries.append(IndexEntryFileName(entry, dv, data, offset))
+            self.entries.append(IndexEntryFileName(data, offset))
             while not self.entries[-1].is_last:
                 offset += self.entries[-1].size
-                self.entries.append(IndexEntryFileName(entry, dv, data, offset))
+                self.entries.append(IndexEntryFileName(data, offset))
 
     def tabulate(self):
         r = (super().tabulate() +
@@ -395,7 +459,32 @@ class IndexRoot(MFTAttr):
 
 
 class IndexRecord(object):
-    pass
+    def __init__(self, data: bytes, offset: int):
+        self.signature = data[offset:offset+4]
+        (self.fixup_offset, self.fixup_entry_count, self.lsn,
+         self.vcn) = struct.unpack('<HHQQ', data[offset + 4:offset + 24])
+        self.index_node_header = IndexNodeHeader(data[offset+24:offset+37])
+
+        of = offset + 24 + self.index_node_header.offset
+
+        self.entries = [IndexEntryFileName(data, of)]
+        while not self.entries[-1].is_last:
+            of += self.entries[-1].size
+            self.entries.append(IndexEntryFileName(data, of))
+
+    def tabulate(self):
+        return ([['----', '----'],
+                 ['Signature', '{} ({})'.format(self.signature.decode(), self.signature)],
+                 ['LSN', self.lsn],
+                 ['VCN', self.vcn],
+                 ['#entries', len(self.entries)], ] +
+                [t for e in self.entries for t in e.tabulate()])
+
+    def __str__(self):
+        return tabulate(self.tabulate())
+
+    def __repr__(self):
+        return self.__str__()
 
 
 @MFTAttribute(0x0A0, '$INDEX_ALLOCATION')
@@ -405,23 +494,21 @@ class IndexAllocation(MFTAttr):
         assert self.non_resident
 
         irs = entry.attrs(type_id=0x90)
-        assert len(irs) == 1
+        assert len(irs) == 1, 'There should be only 1 $INDEX_ROOT'
         ir = irs[0]
 
         self.records: Dict[int, IndexRecord] = {}
         queue = list([e.child_vcn for e in ir.entries if e.child_exists])
+
+        cdata = b''.join([dv.clusters[i] for i in self.vcn.clusters])
         while queue:
             vcn = queue.pop()
-            # for dr in self.data_runs:
-            # assert dr.offset is not None
-            # data = dv.clusters[dr.offset: dr.offset+dr.length]
-            # self.signature = data[: 4]
-            # (self.fixup_offset, self.fixup_entry_count, self.lsn,
-            # self.vcn) = struct.unpack('<HHQQ', data[4:24])
+            self.records[vcn] = IndexRecord(cdata, vcn * dv.cluster_size)
 
     def tabulate(self):
         return (super().tabulate() +
-                [['#IndexRecords', len(self.records)]])
+                [['#IndexRecords', len(self.records)]] +
+                [e for r in self.records.values() for e in r.tabulate()])
 
 
 @MFTAttribute(0x0B0, '$BITMAP')
