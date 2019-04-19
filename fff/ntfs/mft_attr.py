@@ -494,7 +494,7 @@ class IndexAllocation(MFTAttr):
         assert self.non_resident
 
         irs = entry.attrs(type_id=0x90)
-        assert len(irs) == 1, 'There should be only 1 $INDEX_ROOT'
+        assert len(irs) == 1, 'There should be only 1 $INDEX_ROOT, but found {}'.format(len(irs))
         ir = irs[0]
 
         self.records: Dict[int, IndexRecord] = {}

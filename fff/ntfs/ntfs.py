@@ -1,9 +1,12 @@
 from .mft import MFT
 from .boot_sector import BootSector
+from .file import File
 
 from ..entity import Entity
 from ..data_units import DataUnits
 from ..disk_view import DiskView
+
+from typing import Optional
 
 
 class NTFS(Entity):
@@ -24,6 +27,14 @@ class NTFS(Entity):
         i = self.boot_sector.mft_cluster_number
         n = self.boot_sector.cluster_per_file_record_segment
         self.mft = MFT(self, self.clusters[i:i+n])
+
+        e = self.mft.find(inode=5)
+        assert e
+        self.root = File(e, self)
+
+    def find(self, inode: int) -> Optional[File]:
+        e = self.mft.find(inode=inode)
+        return File(e, self) if e else None
 
     @property
     def sector_size(self):
