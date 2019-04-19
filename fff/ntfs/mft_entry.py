@@ -26,6 +26,9 @@ class MFTEntry(object):
         self.base_ref = struct.unpack('<Q', data[32:40])[0]
         self.next_attr_id = struct.unpack('<H', data[40:42])[0]
 
+        if not self.in_use:
+            return
+
         self._attrs: List[MFTAttr] = []
         offset = self.attr_offset
         while self.data[offset:offset+4] != b'\xFF' * 4:
@@ -42,6 +45,10 @@ class MFTEntry(object):
         if name is not None:
             r = [a for a in r if a.name.decode() == name]
         return list(r)
+
+    @property
+    def in_use(self):
+        return self.flags != 0
 
     @property
     def flags_s(self):

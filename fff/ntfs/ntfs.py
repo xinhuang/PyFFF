@@ -32,8 +32,8 @@ class NTFS(Entity):
         assert e
         self.root = File(e, self)
 
-    def find(self, inode: int) -> Optional[File]:
-        e = self.mft.find(inode=inode)
+    def find(self, inode: Optional[int] = None, name: Optional[str] = None) -> Optional[File]:
+        e = self.mft.find(inode=inode, name=name)
         return File(e, self) if e else None
 
     @property
