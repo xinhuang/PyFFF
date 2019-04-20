@@ -23,7 +23,7 @@ class MFT(File):
         data = self.data
         if name is not None:
             for i in range(1, len(data) // bs):
-                e = MFTEntry(data[i*bs:(i+1)*bs], self.fs, i)
+                e = MFTEntry(data[i*bs:(i+1)*bs], self.fs, i, self)
                 self.entries[i] = e
                 for fn in e.attrs(type_id='$FILE_NAME'):
                     if fn.name == name:
@@ -34,7 +34,7 @@ class MFT(File):
             if inode in self.entries:
                 return self.entries[inode]
             else:
-                e = MFTEntry(data[inode*bs:(inode+1)*bs], self.fs, inode)
+                e = MFTEntry(data[inode*bs:(inode+1)*bs], self.fs, inode, self)
                 self.entries[inode] = e
                 return e
         return None

@@ -1,14 +1,18 @@
-from .mft_attr import MFTAttr, create
+from .mft_attr import MFTAttr, create, AttributeList
+from .file_ref import FileRef
 from ..disk_view import DiskView
 
 from tabulate import tabulate
 
 import struct
-from typing import List, Union, Optional
+from typing import List, Union, Optional, TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from .mft import MFT
 
 
 class MFTEntry(object):
-    def __init__(self, data, dv: DiskView, inode: int):
+    def __init__(self, data, dv: DiskView, inode: int, mft: 'Optional[MFT]' = None):
         self.data = data
 
         self.inode = inode
@@ -23,7 +27,7 @@ class MFTEntry(object):
         self.flags = struct.unpack('<H', data[22:24])[0]
         self.used_size = struct.unpack('<I', data[24:28])[0]
         self.alloc_size = struct.unpack('<I', data[28:32])[0]
-        self.base_ref = struct.unpack('<Q', data[32:40])[0]
+        self.base_ref = FileRef(data[32:40])
         self.next_attr_id = struct.unpack('<H', data[40:42])[0]
 
         if not self.in_use:
@@ -38,7 +42,18 @@ class MFTEntry(object):
                 defered.append(offset)
             else:
                 self._attrs.append(attr)
+            if attr.type_id == 0x020:
+                assert mft
+                attr = cast(AttributeList, attr)
+                related_inodes = set()
+                for e in attr.entries:
+                    related_inodes.add(e.file_ref.inode)
+                mft_entries = map(mft.find, related_inodes)
+                for e in mft_entries:
+                    assert e
+                    self._attrs += e._attrs
             offset += attr.size
+
         for d in defered:
             attr = create(self, dv, self.data, d)
             assert not attr.defered
@@ -92,7 +107,7 @@ class MFTEntry(object):
                 ['Flags', '{} ({})'.format(self.flags_s, hex(self.flags))],
                 ['Used Size of MFT Entry', self.used_size],
                 ['Allocated Size of MFT Entry', self.alloc_size],
-                ['File Reference to Base Record', self.base_ref],
+                ['Base Record', self.base_ref.inode],
                 ['Next Attribute ID', self.next_attr_id],
                 ['#attributes', len(self._attrs)], ]
 

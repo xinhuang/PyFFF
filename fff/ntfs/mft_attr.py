@@ -1,4 +1,5 @@
 from .vcn import parse_data_runs, VCN
+from .file_ref import FileRef
 from ..disk_view import DiskView
 
 from tabulate import tabulate
@@ -332,8 +333,7 @@ class Data(MFTAttr):
         if self.non_resident:
             self.data = None
         else:
-            offset += self.attr_offset
-            self.data = data[offset:offset+self.size]
+            self.data = data[offset+self.attr_offset:offset+self.size]
 
     def tabulate(self):
         return super().tabulate() + [
@@ -360,17 +360,6 @@ class IndexNodeHeader(object):
 
     def __repr__(self):
         return self.__str__()
-
-
-class FileRef(object):
-    def __init__(self, data: bytes):
-        assert len(data) == 8
-        self.inode = int.from_bytes(data[:5], byteorder='little')
-        self.seq = int.from_bytes(data[5:], byteorder='little')
-
-    def tabulate(self):
-        return [['inode', self.inode],
-                ['Sequence Number', '{} ({})'.format(self.seq, hex(self.seq))], ]
 
 
 class IndexEntry(object):
@@ -534,3 +523,31 @@ class Bitmap(MFTAttr):
         # TODO: convert bytes to bitmap
         import PIL.Image
         return PIL.Image.fromarray(self.data)
+
+
+class AttributeEntry(object):
+    def __init__(self, data, offset):
+        (self.attr_type, self.entry_size, self.name_size, self.name_offset,
+         self.starting_vcn, _, self.attr_id) = struct.unpack(data[offset:offset+25], '<IHBBQQB')
+        self.file_ref = FileRef(data[16:24])
+
+        name_begin = offset + self.name_offset
+        name_end = name_begin + self.name_size
+        self.name = data[name_begin:name_end]
+
+
+@MFTAttribute(0x020, '$ATTRIBUTE_LIST')
+class AttributeList(MFTAttr):
+    def __init__(self, entry: 'MFTEntry', dv: DiskView, data: bytes, offset: int):
+        super().__init__(data, offset)
+        hexdump(data[offset:offset+self.size])
+
+        assert not self.non_resident
+        data = data[offset+self.attr_offset:offset+self.size]
+
+        self.entries: List[AttributeEntry] = []
+        of = 0
+        while True:
+            ae = AttributeEntry(data, of)
+            of += ae.entry_size
+            self.entries.append(ae)
