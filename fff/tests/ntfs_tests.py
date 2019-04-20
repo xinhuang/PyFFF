@@ -77,6 +77,13 @@ class NTFSTests(TestCase):
         self.assertEqual(4655616, actual.size)
         self.assertEqual(4656128, actual.allocated_size)
 
+    def test_file_attr_inode_200(self):
+        actual = self.sut.find(inode=200)
+
+        self.assertTrue(actual.is_file)
+        self.assertFalse(actual.is_dir)
+        self.assertTrue(actual.is_allocated)
+
     def test_get_root_directory_tabulate(self):
         self.sut.root.tabulate()
 

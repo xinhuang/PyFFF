@@ -57,6 +57,7 @@ class MFTAttr(object):
         of = name_offset + self.name_length * 2
 
         self.raw = data[offset:offset+self.size]
+        self.defered = False
 
         if self.non_resident:
             self.starting_vcn = struct.unpack('<Q', data[offset+0x10:offset+0x18])[0]
@@ -493,17 +494,24 @@ class IndexAllocation(MFTAttr):
         super().__init__(data, offset)
         assert self.non_resident
 
-        irs = entry.attrs(type_id=0x90)
-        assert len(irs) == 1, 'There should be only 1 $INDEX_ROOT, but found {}'.format(len(irs))
-        ir = irs[0]
+        ir = entry.attr(type_id=0x90)
+        if ir is None:
+            # There should be 1 and only 1 $INDEX_ROOT but got none
+            # Defer the creation after all other MFT attributes are created
+            self.defered = True
+        else:
+            self.defered = False
+            ir = entry.attr(type_id=0x90)
+            assert ir, 'There should be 1 and only 1 $INDEX_ROOT but got none'
+            ir = cast(IndexRoot, ir)
+            self.records: Dict[int, IndexRecord] = {}
+            queue = list([cast(IndexEntryFileName, e).child_vcn
+                          for e in ir.entries if e.child_exists])
 
-        self.records: Dict[int, IndexRecord] = {}
-        queue = list([e.child_vcn for e in ir.entries if e.child_exists])
-
-        cdata = b''.join([dv.clusters[i] for i in self.vcn.clusters])
-        while queue:
-            vcn = queue.pop()
-            self.records[vcn] = IndexRecord(cdata, vcn * dv.cluster_size)
+            cdata = b''.join([dv.clusters[i] for i in self.vcn.clusters])
+            while queue:
+                vcn = queue.pop()
+                self.records[vcn] = IndexRecord(cdata, vcn * dv.cluster_size)
 
     def tabulate(self):
         return (super().tabulate() +

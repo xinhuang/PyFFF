@@ -1,5 +1,5 @@
 from .mft_entry import MFTEntry
-from .mft_attr import MFTAttr, FileName, Data
+from .mft_attr import MFTAttr, FileName, Data, IndexAllocation, IndexRoot
 
 from ..entity import Entity
 
@@ -22,6 +22,10 @@ class File(Entity):
         return self.mft_entry.attrs(name=name, type_id=type_id)
 
     @property
+    def inode(self) -> int:
+        return self.mft_entry.inode
+
+    @property
     def name(self) -> str:
         attr = cast(FileName, self.attr(type_id='$FILE_NAME'))
         return attr.filename if attr is not None else ''
@@ -35,6 +39,37 @@ class File(Entity):
     def allocated_size(self) -> int:
         das = self.attrs(type_id='$DATA')
         return sum([da.allocated_size for da in das])
+
+    @property
+    def is_file(self):
+        return self.mft_entry.is_file
+
+    @property
+    def is_dir(self):
+        return self.mft_entry.is_dir
+
+    @property
+    def is_allocated(self):
+        return self.mft_entry.in_use
+
+    def list(self) -> 'List[File]':
+        if self.is_file:
+            return []
+
+        files: List[File] = []
+        ir = self.mft_entry.attr(type_id='$INDEX_ROOT')
+        assert ir
+        ir = cast(IndexRoot, ir)
+        for e in ir.entries:
+            if not e.is_last:
+                files.append(self.fs.find(inode=e.file_ref.inode))
+        ias = self.mft_entry.attrs(type_id='$INDEX_ALLOCATION')
+        for e in [e for ia in ias
+                  for r in cast(IndexAllocation, ia).records.values()
+                  for e in r.entries]:
+            if not e.is_last:
+                files.append(self.fs.find(inode=e.file_ref.inode))
+        return files
 
     # TODO: Refactor the read interface in Entity
     def read2(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:

@@ -31,12 +31,20 @@ class MFTEntry(object):
 
         self._attrs: List[MFTAttr] = []
         offset = self.attr_offset
+        defered: List[int] = []
         while self.data[offset:offset+4] != b'\xFF' * 4:
             attr = create(self, dv, self.data, offset)
-            self._attrs.append(attr)
+            if attr.defered:
+                defered.append(offset)
+            else:
+                self._attrs.append(attr)
             offset += attr.size
+        for d in defered:
+            attr = create(self, dv, self.data, d)
+            assert not attr.defered
+            self._attrs.append(attr)
 
-    def attrs(self, type_id: Union[int, str, None] = None, name: Optional[str] = None):
+    def attrs(self, type_id: Union[int, str, None] = None, name: Optional[str] = None) -> List[MFTAttr]:
         r = self._attrs
         if isinstance(type_id, str):
             r = [a for a in self._attrs if a.type_s == type_id]
@@ -45,6 +53,18 @@ class MFTEntry(object):
         if name is not None:
             r = [a for a in r if a.name.decode() == name]
         return list(r)
+
+    def attr(self, *args, **kwargs) -> Optional[MFTAttr]:
+        attrs = self.attrs(*args, **kwargs)
+        return attrs[0] if attrs else None
+
+    @property
+    def is_file(self):
+        return self.flags == 0x01
+
+    @property
+    def is_dir(self):
+        return self.flags & 2 != 0
 
     @property
     def in_use(self):
@@ -58,7 +78,7 @@ class MFTEntry(object):
             0x02: 'Directory',
             0x03: 'Directory in use',
         }
-        return FLAGS.get(self.flags_s)
+        return FLAGS.get(self.flags)
 
     def tabulate(self):
         return [['inode', self.inode],
@@ -69,7 +89,7 @@ class MFTEntry(object):
                 ['Sequence Number', self.seq],
                 ['Link Count', self.link_count],
                 ['Attribute Offset', self.attr_offset],
-                ['Flags', bin(self.flags_s)],
+                ['Flags', '{} ({})'.format(self.flags_s, hex(self.flags))],
                 ['Used Size of MFT Entry', self.used_size],
                 ['Allocated Size of MFT Entry', self.alloc_size],
                 ['File Reference to Base Record', self.base_ref],
