@@ -22,11 +22,10 @@ class DataUnits(object):
             return self.dv.read(offset=offset, size=self.unit_size)
         elif isinstance(index_or_slice, slice):
             s = index_or_slice
-            begin = self._convert(s.start)
-            end = self._convert(s.stop)
+            begin = self._convert(s.start) * self.unit_size
+            end = self._convert(s.stop) * self.unit_size
             n = end - begin
-            return self.dv.read(offset=begin * self.unit_size,
-                                size=n * self.unit_size)
+            return self.dv.read(offset=begin, size=n)
 
     def __len__(self):
         return self.unit_count

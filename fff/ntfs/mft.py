@@ -1,7 +1,8 @@
-from typing import Optional
-
 from .file import File
 from .mft_entry import MFTEntry
+from .mft_attr import FileName
+
+from typing import cast, Optional
 
 
 class MFT(File):
@@ -26,7 +27,8 @@ class MFT(File):
                 e = MFTEntry(data[i*bs:(i+1)*bs], self.fs, i, self)
                 self.entries[i] = e
                 for fn in e.attrs(type_id='$FILE_NAME'):
-                    if fn.name == name:
+                    fn = cast(FileName, fn)
+                    if fn.filename == name:
                         return e
         elif inode is not None:
             if inode >= len(data) // bs:

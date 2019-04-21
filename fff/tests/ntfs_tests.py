@@ -57,11 +57,11 @@ class NTFSTests(TestCase):
         self.sut.boot_sector.tabulate()
 
     def test_MFT_data_runs(self):
-        data_attr = self.sut.mft.attr(type_id='$DATA')
+        header = self.sut.mft.attr(type_id='$DATA').header
 
-        self.assertEqual(1, len(data_attr.vcn.drs))
-        self.assertEqual(251, data_attr.vcn.drs[0].length)
-        self.assertEqual(16, data_attr.vcn.drs[0].offset)
+        self.assertEqual(1, len(header.vcn.drs))
+        self.assertEqual(251, header.vcn.drs[0].length)
+        self.assertEqual(16, header.vcn.drs[0].offset)
 
     def test_read_mft_first_5_bytes(self):
         actual0 = next(self.sut.mft.read2(skip=0, bsize=1, count=5)).decode()
@@ -91,3 +91,10 @@ class NTFSTests(TestCase):
         root = self.sut.root
 
         self.assertEqual(0, root.attr(type_id='$INDEX_ROOT').entries[0].child_vcn)
+
+    def test_dir_inode_68_attribute_list(self):
+        actual = self.sut.find(inode=68)
+        subs = actual.list()
+
+        self.assertTrue('Users', actual.name)
+        self.assertEqual(16, len(subs))

@@ -1,11 +1,12 @@
-from .mft_attr import MFTAttr, create, AttributeList
+from .mft_attr import AttrHeader, AttributeList, MFTAttr
 from .file_ref import FileRef
 from ..disk_view import DiskView
 
 from tabulate import tabulate
+from hexdump import hexdump
 
 import struct
-from typing import List, Union, Optional, TYPE_CHECKING, cast
+from typing import List, Union, Optional, TYPE_CHECKING, cast, Dict
 
 if TYPE_CHECKING:
     from .mft import MFT
@@ -33,40 +34,51 @@ class MFTEntry(object):
         if not self.in_use:
             return
 
-        self._attrs: List[MFTAttr] = []
+        headers: List[AttrHeader] = []
         offset = self.attr_offset
-        defered: List[int] = []
+        offmap: Dict[AttrHeader, int] = {}
         while self.data[offset:offset+4] != b'\xFF' * 4:
-            attr = create(self, dv, self.data, offset)
-            if attr.defered:
-                defered.append(offset)
-            else:
-                self._attrs.append(attr)
-            if attr.type_id == 0x020:
-                assert mft
+            h = AttrHeader(self.data, offset)
+            headers.append(h)
+            offmap[h] = offset
+            offset += h.size
+
+        self._attrs: List[MFTAttr] = []
+        headers = sorted(headers, key=lambda a: a.type_id)
+        for h in headers:
+            rdata: Optional[bytes] = None
+            if not h.non_resident:
+                of = offmap[h] + h.attr_offset
+                rdata = data[of:of+h.attr_length]
+
+            nrdata: Optional[bytes] = None
+            if h.type_id != 0x080 and h.non_resident:
+                d = []
+                for dr in h.vcn.drs:
+                    assert dr.offset
+                    d.append(dv.clusters[dr.offset:dr.offset+dr.length])
+                nrdata = b''.join(d)
+            attr = h.create(self, rdata, nrdata)
+            self._attrs.append(attr)
+
+            if h.type_id == 0x020:
                 attr = cast(AttributeList, attr)
-                related_inodes = set()
-                for e in attr.entries:
-                    related_inodes.add(e.file_ref.inode)
-                mft_entries = map(mft.find, related_inodes)
-                for e in mft_entries:
+                inodes = set([e.file_ref.inode for e in attr.entries])
+                inodes.discard(inode)    # don't recursive into itself
+                assert mft
+                entries = list(map(lambda inode: mft.find(inode=inode), inodes))  # type: ignore
+                for e in entries:
                     assert e
                     self._attrs += e._attrs
-            offset += attr.size
-
-        for d in defered:
-            attr = create(self, dv, self.data, d)
-            assert not attr.defered
-            self._attrs.append(attr)
 
     def attrs(self, type_id: Union[int, str, None] = None, name: Optional[str] = None) -> List[MFTAttr]:
         r = self._attrs
         if isinstance(type_id, str):
-            r = [a for a in self._attrs if a.type_s == type_id]
+            r = [a for a in self._attrs if a.header.type_s == type_id]
         elif isinstance(type_id, int):
-            r = [a for a in self._attrs if a.type_id == type_id]
+            r = [a for a in self._attrs if a.header.type_id == type_id]
         if name is not None:
-            r = [a for a in r if a.name.decode() == name]
+            r = [a for a in r if a.header.name.decode() == name]
         return list(r)
 
     def attr(self, *args, **kwargs) -> Optional[MFTAttr]:

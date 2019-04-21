@@ -1,5 +1,5 @@
 from .mft_entry import MFTEntry
-from .mft_attr import MFTAttr, FileName, Data, IndexAllocation, IndexRoot
+from .mft_attr import FileName, Data, IndexAllocation, IndexRoot, MFTAttr
 
 from ..entity import Entity
 
@@ -33,12 +33,12 @@ class File(Entity):
     @property
     def size(self) -> int:
         das = self.attrs(type_id='$DATA')
-        return sum([da.actual_size for da in das])
+        return sum([da.header.actual_size for da in das])
 
     @property
     def allocated_size(self) -> int:
         das = self.attrs(type_id='$DATA')
-        return sum([da.allocated_size for da in das])
+        return sum([da.header.allocated_size for da in das])
 
     @property
     def is_file(self):
@@ -79,7 +79,7 @@ class File(Entity):
         bytes_left = count * bsize
         attrs = self.attrs(type_id='$DATA')
         data_attrs = cast(List[Data], attrs)
-        for dr in [dr for data_attr in data_attrs for dr in data_attr.vcn.drs]:
+        for dr in [dr for data_attr in data_attrs for dr in data_attr.header.vcn.drs]:
             # length, offset = dr
             to_read = min(bytes_left, dr.length * cluster_size)
             bytes_left -= to_read
