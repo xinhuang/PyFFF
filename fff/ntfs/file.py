@@ -86,8 +86,9 @@ class File(Entity):
             yield self.fs.read2(offset=dr.offset * self.fs.cluster_size, size=to_read)
 
     def tabulate(self) -> List[Sequence[Any]]:
-        return [['File Name', self.name],
+        return [['Name', self.name],
                 ['inode', self.mft_entry.inode],
+                ['Type', 'File' if self.is_file else 'Dir'],
                 ['Size', self.size],
                 ['Allocated Size', self.allocated_size], ]
 
