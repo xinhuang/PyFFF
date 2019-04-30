@@ -2,8 +2,10 @@ from .mft_entry import MFTEntry
 from .mft_attr import FileName, Data, IndexAllocation, IndexRoot, MFTAttr
 
 from ..entity import Entity
+from .. import previewer
 
 from tabulate import tabulate
+import filetype
 
 from typing import Optional, cast, List, Iterable, Sequence, Any, Pattern
 from itertools import chain
@@ -88,6 +90,18 @@ class File(object):
         size = self.allocated_size - self.size
         return b''.join(self.read(count=size, skip=self.size))
 
+    @property
+    def mime(self) -> str:
+        kind = filetype.guess(b''.join(self.read(count=261)))
+        if kind:
+            return kind.mime
+        else:
+            return ''
+
+    @property
+    def data(self) -> bytes:
+        return b''.join(self.read(self.size))
+
     def list(self, recursive: bool = False, pattern: str = None, regex: str = None,
              _reobj: Pattern = None) -> 'Iterable[File]':
         if self.is_file:
@@ -144,6 +158,9 @@ class File(object):
                 ['Type', 'File' if self.is_file else 'Dir'],
                 ['Size', self.size],
                 ['Allocated Size', self.allocated_size], ]
+
+    def preview(self):
+        previewer.preview(self)
 
     def __str__(self):
         return '{} {:>8} "{}" {}'.format('r' if self.is_file else 'd',
