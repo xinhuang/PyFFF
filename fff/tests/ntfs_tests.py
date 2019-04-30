@@ -26,11 +26,6 @@ class NTFSTests(TestCase):
         self.sut = None
         self.disk = None
 
-    def test_count_of_MFT_entries(self):
-        self.skipTest('TODO: Parse NTFS MFT')
-
-        self.assertEqual(251, len(self.sut.mft.entries))
-
     def test_mft_entry_attributes(self):
         self.assertTrue(self.sut.mft.mft_entry.attrs())
 
@@ -66,9 +61,16 @@ class NTFSTests(TestCase):
     def test_read_mft_first_5_bytes(self):
         actual0 = next(self.sut.mft.read(skip=0, bsize=1, count=5)).decode()
         actual1 = next(self.sut.mft.read(skip=0, bsize=5, count=1)).decode()
+        actual2 = next(self.sut.mft.read(skip=1, bsize=1, count=4)).decode()
+        actual3 = next(self.sut.mft.read(skip=1, bsize=2, count=1)).decode()
+        actual4 = b''.join(self.sut.mft.read(skip=1, bsize=3, count=1)).decode()
 
         self.assertEqual('FILE0', actual0)
         self.assertEqual('FILE0', actual1)
+        self.assertEqual('ILE0', actual2)
+        self.assertEqual('LE', actual3)
+        self.assertEqual(3, len(actual4))
+        self.assertEqual('E0', actual4[:2])
 
     def test_get_file_size_inode_200(self):
         actual = self.sut.find(inode=200)

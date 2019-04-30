@@ -119,17 +119,20 @@ class File(object):
 
     # TODO: Refactor the read interface in Entity
     def read(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
-        assert skip == 0, 'Skip is not supported yet'
         cluster_size = self.fs.cluster_size
+        skip *= bsize
 
         bytes_left = count * bsize
         attrs = self.attrs(type_id='$DATA')
         data_attrs = cast(List[Data], attrs)
         for dr in [dr for data_attr in data_attrs for dr in data_attr.header.vcn.drs]:
-            # length, offset = dr
-            to_read = min(bytes_left, dr.length * cluster_size)
-            bytes_left -= to_read
-            yield self.fs.read(offset=dr.offset * self.fs.cluster_size, size=to_read)
+            consec_size = dr.length * cluster_size
+            if skip >= consec_size:
+                skip -= consec_size
+            else:
+                to_read = min(skip + bytes_left, consec_size)
+                bytes_left = bytes_left - to_read + skip
+                yield self.fs.read(offset=dr.offset * self.fs.cluster_size, size=to_read)[skip:]
 
     def tabulate(self) -> List[Sequence[Any]]:
         return [['Name', self.name],
