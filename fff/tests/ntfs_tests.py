@@ -72,6 +72,13 @@ class NTFSTests(TestCase):
         self.assertEqual(3, len(actual4))
         self.assertEqual('E0', actual4[:2])
 
+    def test_slack_space_inode_132(self):
+        f = self.sut.find(inode=132)
+
+        actual = f.slack_space
+
+        self.assertEqual(776, len(actual))
+
     def test_get_file_size_inode_200(self):
         actual = self.sut.find(inode=200)
 

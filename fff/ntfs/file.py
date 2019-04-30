@@ -42,13 +42,12 @@ class File(object):
 
     @property
     def size(self) -> int:
-        das = self.attrs(type_id='$DATA')
-        return sum([da.header.actual_size for da in das
-                    if not da.name])
+        das = self.attrs(type_id='$DATA', name='')
+        return sum([da.header.actual_size for da in das])
 
     @property
     def allocated_size(self) -> int:
-        das = self.attrs(type_id='$DATA')
+        das = self.attrs(type_id='$DATA', name='')
         return sum([da.header.allocated_size for da in das])
 
     @property
@@ -83,6 +82,11 @@ class File(object):
             r = path.join(p.name, r)
             p = p.parent
         return r
+
+    @property
+    def slack_space(self) -> bytes:
+        size = self.allocated_size - self.size
+        return b''.join(self.read(count=size, skip=self.size))
 
     def list(self, recursive: bool = False, pattern: str = None, regex: str = None,
              _reobj: Pattern = None) -> 'Iterable[File]':
@@ -123,7 +127,7 @@ class File(object):
         skip *= bsize
 
         bytes_left = count * bsize
-        attrs = self.attrs(type_id='$DATA')
+        attrs = self.attrs(type_id='$DATA', name='')
         data_attrs = cast(List[Data], attrs)
         for dr in [dr for data_attr in data_attrs for dr in data_attr.header.vcn.drs]:
             consec_size = dr.length * cluster_size
