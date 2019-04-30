@@ -47,6 +47,18 @@ class MFTAttr(object):
     def __init__(self, header: 'AttrHeader', *args, **kwargs):
         self.header = header
 
+    @property
+    def name(self):
+        return self.header.name
+
+    @property
+    def is_resident(self):
+        return not self.non_resident
+
+    @property
+    def non_resident(self):
+        return self.header.non_resident
+
     def tabulate(self):
         return self.header.tabulate()
 
@@ -70,7 +82,7 @@ class AttrHeader(object):
         self.attr_id = struct.unpack('<H', data[offset+14:offset+16])[0]
 
         name_offset = offset + self.name_offset
-        self.name = data[name_offset:name_offset+self.name_length*2]
+        self.name = data[name_offset:name_offset+self.name_length*2].decode()
         of = name_offset + self.name_length * 2
 
         self.raw = data[offset:offset+self.size]
@@ -108,7 +120,7 @@ class AttrHeader(object):
 
     def tabulate(self) -> List[Sequence[Any]]:
         r: List[Sequence[Any]] = [('Type ID', '{} ({})'.format(self.type_id, self.type_s)),
-                                  ['Name', '{} ({})'.format(self.name.decode(), self.name)],
+                                  ['Name', '{}'.format(self.name)],
                                   ['Size', self.size],
                                   ['Non-Resident Flag', '{} ({})'.format(self.non_resident,
                                                                          'Non-Resident'
@@ -243,7 +255,7 @@ class FileNameHeader(object):
     def __init__(self, data: bytes, offset: int, **kwargs):
         super().__init__()
 
-        self.parent_dir = struct.unpack('<Q', data[offset:offset+8])[0]
+        self.parent = FileRef(data[:8])
         self.ctime = struct.unpack('<Q', data[offset+8:offset+16])[0]  # File creation
         self.atime = struct.unpack('<Q', data[offset+16:offset+24])[0]  # File altered
         self.mtime = struct.unpack('<Q', data[offset+24:offset+32])[0]  # MFT changed
@@ -282,7 +294,7 @@ class FileNameHeader(object):
                 ['Name Length', self.name_length],
                 ['Namespace', self.namespace_s],
                 ['File Name', self.filename],
-                ['Parent Dir', self.parent_dir], ]
+                ['Parent', self.parent], ]
 
 
 @MFTAttribute(0x030, '$FILE_NAME')
@@ -294,7 +306,7 @@ class FileName(MFTAttr):
 
         super().__init__(header)
 
-        self.parent_dir = struct.unpack('<Q', rdata[:8])[0]
+        self.parent = FileRef(rdata[:8])
         self.ctime = struct.unpack('<Q', rdata[8:16])[0]  # File creation
         self.atime = struct.unpack('<Q', rdata[16:24])[0]  # File altered
         self.mtime = struct.unpack('<Q', rdata[24:32])[0]  # MFT changed
@@ -334,7 +346,7 @@ class FileName(MFTAttr):
             ['Name Length', self.name_length],
             ['Namespace', self.namespace_s],
             ['File Name', self.filename],
-            ['Parent Dir', self.parent_dir], ]
+            ['Parent', self.parent], ]
 
 
 @MFTAttribute(0x080, '$DATA')

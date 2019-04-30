@@ -9,6 +9,7 @@ from typing import Optional, cast, List, Iterable, Sequence, Any, Pattern
 from itertools import chain
 import fnmatch
 import re
+from os import path
 
 
 class File(object):
@@ -42,7 +43,8 @@ class File(object):
     @property
     def size(self) -> int:
         das = self.attrs(type_id='$DATA')
-        return sum([da.header.actual_size for da in das])
+        return sum([da.header.actual_size for da in das
+                    if not da.name])
 
     @property
     def allocated_size(self) -> int:
@@ -60,6 +62,27 @@ class File(object):
     @property
     def is_allocated(self):
         return self.mft_entry.in_use
+
+    @property
+    def parent(self):
+        fn = cast(FileName, self.attr(type_id='$FILE_NAME'))
+        pid = fn.parent.inode
+        if pid == self.mft_entry.inode:
+            return None
+        else:
+            return self.fs.find(inode=pid)
+
+    @property
+    def fullpath(self) -> str:
+        if self.name == '.':
+            return '/'
+
+        r = self.name
+        p = self.parent
+        while p.name != '.':
+            r = path.join(p.name, r)
+            p = p.parent
+        return r
 
     def list(self, recursive: bool = False, pattern: str = None, regex: str = None,
              _reobj: Pattern = None) -> 'Iterable[File]':
@@ -116,7 +139,8 @@ class File(object):
                 ['Allocated Size', self.allocated_size], ]
 
     def __str__(self):
-        return '{} {:>8} "{}"'.format('r' if self.is_file else 'd', self.mft_entry.inode, self.name)
+        return '{} {:>8} "{}" {}'.format('r' if self.is_file else 'd',
+                                         self.mft_entry.inode, self.name, self.size)
 
     def __repr__(self):
         return self.__str__()

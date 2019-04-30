@@ -78,7 +78,7 @@ class MFTEntry(object):
         elif isinstance(type_id, int):
             r = [a for a in self._attrs if a.header.type_id == type_id]
         if name is not None:
-            r = [a for a in r if a.header.name.decode() == name]
+            r = [a for a in r if a.header.name == name]
         return list(r)
 
     def attr(self, *args, **kwargs) -> Optional[MFTAttr]:
