@@ -1,8 +1,10 @@
+from .abstract_file import AbstractFile
+
 from IPython.display import Image, Audio, display, DisplayObject
 from binascii import b2a_base64
 
 
-def preview_audio(file):
+def preview_audio(file: AbstractFile):
     audio = Audio(data=file.data)
     display(audio)
 
@@ -75,12 +77,12 @@ class Video(DisplayObject):
         pass
 
 
-def preview_video(file):
+def preview_video(file: AbstractFile):
     video = Video(file.data, embed=True, mimetype=file.mime)
     display(video)
 
 
-def preview_image(file):
+def preview_image(file: AbstractFile):
     img = Image(data=file.data)
     display(img)
 
@@ -92,7 +94,7 @@ PREVIEWERS = {
 }
 
 
-def preview(file):
+def preview(file: AbstractFile):
     type = file.mime
     cat = type.split('/')[0]
     previewer = PREVIEWERS.get(cat)

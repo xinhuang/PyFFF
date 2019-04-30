@@ -2,6 +2,7 @@ from .mft_entry import MFTEntry
 from .mft_attr import FileName, Data, IndexAllocation, IndexRoot, MFTAttr
 
 from ..entity import Entity
+from ..abstract_file import AbstractFile
 from .. import previewer
 
 from tabulate import tabulate
@@ -14,9 +15,9 @@ import re
 from os import path
 
 
-class File(object):
+class File(AbstractFile):
     def __init__(self, mft_entry: MFTEntry, filesystem):
-        # Entity.__init__(self)
+        super().__init__()
         self.fs = filesystem
         self.mft_entry = mft_entry
 
