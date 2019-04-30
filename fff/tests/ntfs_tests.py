@@ -94,7 +94,7 @@ class NTFSTests(TestCase):
 
     def test_dir_inode_68_attribute_list(self):
         actual = self.sut.find(inode=68)
-        subs = actual.list()
+        subs = list(actual.list())
 
         self.assertTrue('Users', actual.name)
         self.assertEqual(16, len(subs))

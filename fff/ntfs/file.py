@@ -5,7 +5,10 @@ from ..entity import Entity
 
 from tabulate import tabulate
 
-from typing import Optional, cast, List, Iterable, Sequence, Any
+from typing import Optional, cast, List, Iterable, Sequence, Any, Pattern
+from itertools import chain
+import fnmatch
+import re
 
 
 class File(object):
@@ -58,24 +61,38 @@ class File(object):
     def is_allocated(self):
         return self.mft_entry.in_use
 
-    def list(self) -> 'List[File]':
+    def list(self, recursive: bool = False, pattern: str = None, regex: str = None,
+             _reobj: Pattern = None) -> 'Iterable[File]':
         if self.is_file:
-            return []
+            return
 
-        files: List[File] = []
+        assert not (pattern and regex)
+
+        if pattern:
+            regex = fnmatch.translate(pattern)
+        if regex:
+            assert not _reobj
+            _reobj = re.compile(regex)
+
         ir = self.mft_entry.attr(type_id='$INDEX_ROOT')
         assert ir
         ir = cast(IndexRoot, ir)
-        for e in ir.entries:
-            if not e.is_last:
-                files.append(self.fs.find(inode=e.file_ref.inode))
         ias = self.mft_entry.attrs(type_id='$INDEX_ALLOCATION')
-        for e in [e for ia in ias
-                  for r in cast(IndexAllocation, ia).records.values()
-                  for e in r.entries]:
+
+        entries = chain(ir.entries,
+                        (e for ia in ias
+                         for r in cast(IndexAllocation, ia).records.values()
+                         for e in r.entries))
+
+        for e in entries:
             if not e.is_last:
-                files.append(self.fs.find(inode=e.file_ref.inode))
-        return files
+                f = self.fs.find(inode=e.file_ref.inode)
+                if not _reobj or _reobj.search(f.name):
+                    yield f
+                if f.is_dir and recursive and f.mft_entry.inode != self.mft_entry.inode:
+                    for sub in f.list(recursive=recursive, _reobj=_reobj):
+                        if not _reobj or _reobj.search(sub.name):
+                            yield sub
 
     # TODO: Refactor the read interface in Entity
     def read(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
