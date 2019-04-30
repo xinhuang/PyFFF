@@ -27,8 +27,14 @@ class File(object):
 
     @property
     def name(self) -> str:
-        attr = cast(FileName, self.attr(type_id='$FILE_NAME'))
-        return attr.filename if attr is not None else ''
+        attrs = cast(List[FileName], self.attrs(type_id='$FILE_NAME'))
+        win32 = next((a for a in attrs if (a.namespace & 1) != 0), None)
+        if win32:
+            return win32.filename
+        dos = next((a for a in attrs if a.namespace == 2), None)
+        if dos:
+            return dos.filename
+        return attrs[0].filename if attrs else ''
 
     @property
     def size(self) -> int:
@@ -93,7 +99,7 @@ class File(object):
                 ['Allocated Size', self.allocated_size], ]
 
     def __str__(self):
-        return tabulate(self.tabulate())
+        return '{} {:>8} "{}"'.format('r' if self.is_file else 'd', self.mft_entry.inode, self.name)
 
     def __repr__(self):
         return self.__str__()
