@@ -8,9 +8,9 @@ from tabulate import tabulate
 from typing import Optional, cast, List, Iterable, Sequence, Any
 
 
-class File(Entity):
+class File(object):
     def __init__(self, mft_entry: MFTEntry, filesystem):
-        Entity.__init__(self)
+        # Entity.__init__(self)
         self.fs = filesystem
         self.mft_entry = mft_entry
 
@@ -72,7 +72,7 @@ class File(Entity):
         return files
 
     # TODO: Refactor the read interface in Entity
-    def read2(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
+    def read(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
         assert skip == 0, 'Skip is not supported yet'
         cluster_size = self.fs.cluster_size
 
@@ -83,7 +83,7 @@ class File(Entity):
             # length, offset = dr
             to_read = min(bytes_left, dr.length * cluster_size)
             bytes_left -= to_read
-            yield self.fs.read2(offset=dr.offset * self.fs.cluster_size, size=to_read)
+            yield self.fs.read(offset=dr.offset * self.fs.cluster_size, size=to_read)
 
     def tabulate(self) -> List[Sequence[Any]]:
         return [['Name', self.name],

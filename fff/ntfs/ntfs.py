@@ -9,9 +9,9 @@ from ..disk_view import DiskView
 from typing import Optional
 
 
-class NTFS(Entity):
+class NTFS(object):
     def __init__(self, dv: DiskView, sector0: bytes, parent):
-        Entity.__init__(self)
+        # Entity.__init__(self)
         self.boot_sector = BootSector(sector0)
         bs = self.boot_sector
         self.dv = DiskView(dv.disk, dv.begin, dv.size,
@@ -44,6 +44,5 @@ class NTFS(Entity):
     def cluster_size(self):
         return self.boot_sector.cluster_size
 
-    # TODO:
-    def read2(self, size: int, offset: int) -> bytes:
+    def read(self, size: int, offset: int) -> bytes:
         return self.dv.read(offset=offset, size=size)

@@ -126,3 +126,6 @@ class Partition(Entity):
         return tabulate(rows,
                         headers=['#', 'Slot', 'Start', 'End', 'Length',
                                  'Description', 'CHS', ])
+
+    def __repr__(self):
+        return self.__str__()

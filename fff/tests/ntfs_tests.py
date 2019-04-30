@@ -64,8 +64,8 @@ class NTFSTests(TestCase):
         self.assertEqual(16, header.vcn.drs[0].offset)
 
     def test_read_mft_first_5_bytes(self):
-        actual0 = next(self.sut.mft.read2(skip=0, bsize=1, count=5)).decode()
-        actual1 = next(self.sut.mft.read2(skip=0, bsize=5, count=1)).decode()
+        actual0 = next(self.sut.mft.read(skip=0, bsize=1, count=5)).decode()
+        actual1 = next(self.sut.mft.read(skip=0, bsize=5, count=1)).decode()
 
         self.assertEqual('FILE0', actual0)
         self.assertEqual('FILE0', actual1)

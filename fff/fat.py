@@ -1,5 +1,7 @@
 import struct
 
+from tabulate import tabulate
+
 
 class BootSector(object):
     def __init__(self, disk, sector0):
@@ -8,7 +10,7 @@ class BootSector(object):
         self.oem = sector0[3:11]
         self.bytes_per_sector = struct.unpack('<H', sector0[11:13])[0]
         self.sectors_per_cluster = sector0[13]
-        self.reserved_size = struct.unpack('<H', sector0[14:16])[0]
+        self.reserved_sectors = struct.unpack('<H', sector0[14:16])[0]
         self.nfats = sector0[16]
         self.max_files_in_root = struct.unpack('<H', sector0[17:19])[0]
         self.nsectors16 = struct.unpack('<H', sector0[19:21])[0]
@@ -18,6 +20,33 @@ class BootSector(object):
         self.nheads = struct.unpack('<H', sector0[26:28])[0]
         self.sectors_before_partition = struct.unpack('<I', sector0[28:32])[0]
         self.nsectors32 = struct.unpack('<I', sector0[32:36])[0]
+
+        self.sector_count = self.nsectors16 + self.nsectors32 << 16
+
+    @property
+    def media_type_s(self):
+        pass
+
+    def tabulate(self):
+        return [['JMP', self.jump.hex()],
+                ['OEM', self.oem.hex()],
+                ['Bytes per Sector', self.bytes_per_sector],
+                ['Sectors per Cluster', self.sectors_per_cluster],
+                ['Reserved Sectors', self.reserved_sectors],
+                ['#FAT', self.nfats],
+                ['Max Files in Root', self.max_files_in_root],
+                ['#Sectors', self.sector_count],
+                ['Media Type', self.media_type_s],
+                ['FAT Size', self.fat_size],
+                ['Sectors per Track', self.sectors_per_track],
+                ['#Heads', self.nheads],
+                ['Sectors Before Partition', self.sectors_before_partition], ]
+
+    def __str__(self):
+        return tabulate(self.tabulate())
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class FAT(object):
@@ -35,6 +64,15 @@ class FAT(object):
             return 16
         else:
             return 32
+
+    def tabulate(self):
+        return self.boot_sector.tabulate()
+
+    def __str__(self):
+        return tabulate(self.tabulate())
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class FAT12(FAT):

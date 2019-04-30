@@ -16,7 +16,7 @@ class MFT(File):
     @property
     def data(self):
         if self._data is None:
-            self._data = b''.join(self.read2(count=self.size))
+            self._data = b''.join(self.read(count=self.size))
         return self._data
 
     def find(self, name: Optional[str] = None, inode: Optional[int] = None) -> Optional[MFTEntry]:
