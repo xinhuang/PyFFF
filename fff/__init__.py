@@ -5,7 +5,7 @@ from .partition import Partition
 
 from tabulate import tabulate
 from hexdump import hexdump as hd
-import filetype
+import magic
 
 import struct
 import operator
@@ -150,20 +150,21 @@ class DiskImage(object):
     def __init__(self, filepath):
         self.filepath = filepath
 
-        kind = filetype.guess(self.filepath)
-        self.mime = kind.mime if kind else 'n/a'
-        if kind is None:
+        self.mime = magic.from_file(self.filepath, mime=True)
+        if not self.mime:
             self._archive = None
             self._file = open(filepath, 'rb')
-        elif kind.mime == 'application/zip':
+        elif self.mime == 'application/zip':
             self._archive = ZipFile(self.filepath)
             first_file = self._archive.namelist()[0]
             self._file = self._archive.open(first_file)
-        elif kind.mime == 'application/gzip':
+        elif self.mime in ['application/x-gzip', 'application/gzip']:
+            # magic uses x-gzip, IANA defines gzip
+            # See https://www.iana.org/assignments/media-types/media-types.xhtml
             self._archive = None
             self._file = gzip.open(self.filepath)
         else:
-            assert 'Unsupported MIME: {}'.format(kind.mime) and False
+            assert 'Unsupported MIME: {}'.format(self.mime) and False
 
         self._file.seek(0, 2)
         dv = DiskView(self._file, 0, self._file.tell())

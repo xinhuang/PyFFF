@@ -16,7 +16,7 @@ setup(
     author='Xin Huang',
     author_email='xinhuang@protomail.com',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
-    install_requires=['tabulate', 'hexdump', 'filetype'],
+    install_requires=['tabulate', 'hexdump', 'python-magic', 'ipython', 'mypy', 'Pillow'],
     extras_require={
         'dev': [],
         'test': [],

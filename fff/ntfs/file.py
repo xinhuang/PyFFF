@@ -5,7 +5,7 @@ from ..entity import Entity
 from .. import previewer
 
 from tabulate import tabulate
-import filetype
+import magic
 
 from typing import Optional, cast, List, Iterable, Sequence, Any, Pattern
 from itertools import chain
@@ -92,11 +92,7 @@ class File(object):
 
     @property
     def mime(self) -> str:
-        kind = filetype.guess(b''.join(self.read(count=261)))
-        if kind:
-            return kind.mime
-        else:
-            return ''
+        return magic.from_buffer(b''.join(self.read(count=261)), mime=True)
 
     @property
     def data(self) -> bytes:
