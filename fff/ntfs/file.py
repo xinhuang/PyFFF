@@ -84,7 +84,7 @@ class File(AbstractFile):
         while p.name != '.':
             r = path.join(p.name, r)
             p = p.parent
-        return r
+        return '/' + r
 
     @property
     def slack_space(self) -> bytes:

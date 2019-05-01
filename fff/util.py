@@ -1,3 +1,5 @@
+from .abstract_file import AbstractFile
+
 from hexdump import hexdump
 import hashlib
 import collections
@@ -10,3 +12,5 @@ def md5sum(data):
         return hashlib.md5(data).hexdigest()
     elif isinstance(data, collections.Iterable):
         return md5sum(b''.join(data))
+    elif isinstance(data, AbstractFile):
+        return md5sum(data.data)

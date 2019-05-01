@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 class MFTEntry(object):
     def __init__(self, data, dv: DiskView, inode: int, mft: 'Optional[MFT]' = None):
-        self.data = data
+        self.raw = data
 
         self.inode = inode
 
@@ -37,8 +37,8 @@ class MFTEntry(object):
         headers: List[AttrHeader] = []
         offset = self.attr_offset
         offmap: Dict[AttrHeader, int] = {}
-        while self.data[offset:offset+4] != b'\xFF' * 4:
-            h = AttrHeader(self.data, offset)
+        while self.raw[offset:offset+4] != b'\xFF' * 4:
+            h = AttrHeader(self.raw, offset)
             headers.append(h)
             offmap[h] = offset
             offset += h.size

@@ -18,10 +18,10 @@ PARTITION_TYPES = {
     0x00: 'Unused Partition Table Entry',
     0x01: 'DOS 12-bit FAT',
 
-    0x04: '04 DOS 3.0+ 16-bit FAT (up to 32M)',
+    0x04: '04 DOS 3.0+ 16-bit FAT',
     0x05: 'DOS 3.3+ Extended Partition',
-    0x06: '06 DOS 3.31+ 16-bit FAT (over 32M)',
-    0x07: '07 Windows NT NTFS/exFAT/Advanced Unix/QNX2.x pre-1988',
+    0x06: '06 DOS 3.31+ 16-bit FAT',
+    0x07: '07 Windows NT NTFS/exFAT/Advanced Unix',
 
     0x0B: 'WIN95 OSR2 FAT32',
     0x0C: 'WIN95 OSR2 FAT32, LBA-mapped',
