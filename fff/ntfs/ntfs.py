@@ -6,7 +6,7 @@ from ..entity import Entity
 from ..data_units import DataUnits
 from ..disk_view import DiskView
 
-from typing import Optional
+from typing import Optional, Iterable
 
 
 class NTFS(object):
@@ -31,6 +31,20 @@ class NTFS(object):
         e = self.mft.find(inode=5)
         assert e
         self.root = File(e, self)
+
+    @property
+    def files(self) -> Iterable[File]:
+        for i in range(self.mft.entry_total):
+            f = self.find(inode=i)
+            if f and f.is_allocated:
+                yield f
+
+    def get_file(self, offset: int)-> Optional[File]:
+        cluster = offset / self.cluster_size
+        for f in self.files:
+            if f.contains(cluster=cluster):
+                return f
+        return None
 
     def find(self, inode: Optional[int] = None, name: Optional[str] = None) -> Optional[File]:
         e = self.mft.find(inode=inode, name=name)

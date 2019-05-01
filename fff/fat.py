@@ -5,7 +5,7 @@ from tabulate import tabulate
 
 class BootSector(object):
     def __init__(self, disk, sector0):
-        self.data = sector0
+        self.raw = sector0
         self.jump = sector0[0:3]
         self.oem = sector0[3:11]
         self.bytes_per_sector = struct.unpack('<H', sector0[11:13])[0]
@@ -67,6 +67,9 @@ class FAT(object):
 
     def tabulate(self):
         return self.boot_sector.tabulate()
+
+    def get_file(self, offset: int):
+        pass
 
     def __str__(self):
         return tabulate(self.tabulate())

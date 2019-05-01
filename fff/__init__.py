@@ -2,6 +2,7 @@ from .disk_view import DiskView
 from .entity import Entity
 from .unallocated_space import UnallocatedSpace
 from .partition import Partition
+from .abstract_file import AbstractFile
 
 from tabulate import tabulate
 from hexdump import hexdump as hd
@@ -12,7 +13,7 @@ import operator
 from functools import reduce
 from zipfile import ZipFile
 import gzip
-from typing import Sequence
+from typing import Sequence, Optional
 
 
 class MBR(Entity):
@@ -36,6 +37,7 @@ class MBR(Entity):
         self.partitions: Sequence[Partition] = []
 
         data = disk_view.read(512, offset=0)
+        self.raw = data
 
         self.boot_code = struct.unpack('<446B', data[0:446])
         self.signature = struct.unpack('<H', data[510:])[0]
@@ -128,6 +130,15 @@ class MBR(Entity):
                 us = UnallocatedSpace(ps[-1].last_sector + 1,
                                       self.last_sector, parent=self)
                 self.unallocated.append(us)
+
+    def get_file(self, offset: int) -> Optional[AbstractFile]:
+        for e in self.entities:
+            if e == self:
+                continue
+            f = e.get_file(offset=offset)
+            if f:
+                return f
+        return None
 
     def hexdump(self):
         data = self.read(0, 512)

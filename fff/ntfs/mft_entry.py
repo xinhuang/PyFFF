@@ -72,6 +72,8 @@ class MFTEntry(object):
                     self._attrs += e._attrs
 
     def attrs(self, type_id: Union[int, str, None] = None, name: Optional[str] = None) -> List[MFTAttr]:
+        assert self.in_use and 'TODO: Deleted file recovery is not implemented'
+
         r = self._attrs
         if isinstance(type_id, str):
             r = [a for a in self._attrs if a.header.type_s == type_id]

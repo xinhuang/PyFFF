@@ -98,6 +98,11 @@ class Partition(Entity):
     def hexdump(self):
         return hd(self.data)
 
+    def get_file(self, offset: int):
+        sector = offset / self.sector_size
+        if sector >= self.first_sector and sector <= self.last_sector:
+            return self.filesystem.get_file(offset - self.first_sector * self.sector_size)
+
     @property
     def filesystem(self):
         return filesystem.get_filesystem(self.dv, self)

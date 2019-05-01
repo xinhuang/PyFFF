@@ -7,7 +7,7 @@ class BootSector(object):
     SIGNATURE = b'NTFS    '
 
     def __init__(self, sector0: bytes):
-        self.data = sector0[0:0x200]
+        self.raw = sector0[0:0x200]
         self.jmp = sector0[0:3]
         self.signature = sector0[3:11]
         assert self.signature == BootSector.SIGNATURE

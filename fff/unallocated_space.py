@@ -22,6 +22,9 @@ class UnallocatedSpace(Entity):
     def sector_size(self):
         return self.parent.sector_size
 
+    def get_file(*args, **kwargs):
+        pass
+
     def tabulate(self):
         return [[self.index,
                  '{}:-'.format(self.parent.number),

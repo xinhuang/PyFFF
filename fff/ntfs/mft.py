@@ -13,6 +13,9 @@ class MFT(File):
         self.entries = {0: self.mft_entry}
         self._data = None
 
+        mft_clusters: int = self.size // filesystem.cluster_size
+        self.entry_total: int = mft_clusters // filesystem.boot_sector.cluster_per_file_record_segment
+
     @property
     def data(self):
         if self._data is None:

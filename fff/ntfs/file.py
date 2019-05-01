@@ -132,7 +132,6 @@ class File(AbstractFile):
                         if not _reobj or _reobj.search(sub.name):
                             yield sub
 
-    # TODO: Refactor the read interface in Entity
     def read(self, count: int, skip: int = 0, bsize: int = 1) -> Iterable[bytes]:
         cluster_size = self.fs.cluster_size
         skip *= bsize
@@ -148,6 +147,16 @@ class File(AbstractFile):
                 to_read = min(skip + bytes_left, consec_size)
                 bytes_left = bytes_left - to_read + skip
                 yield self.fs.read(offset=dr.offset * self.fs.cluster_size, size=to_read)[skip:]
+
+    def contains(self, cluster: int) -> bool:
+        attrs = self.attrs(type_id='$DATA', name='')
+        data_attrs = cast(List[Data], attrs)
+        for dr in [dr for data_attr in data_attrs for dr in data_attr.header.vcn.drs]:
+            if not dr.offset:
+                continue
+            if cluster >= dr.offset and cluster < dr.offset + dr.length:
+                return True
+        return False
 
     def tabulate(self) -> List[Sequence[Any]]:
         return [['Name', self.name],
