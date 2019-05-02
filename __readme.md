@@ -1,6 +1,6 @@
 
 
-# Example
+# Usage
 
     import fff
     from fff.util import *
@@ -53,11 +53,19 @@ For Windows, please check the python-magic project page.
     # Create installation package
     $ python setup.py sdist
     
+    # Build HTML documentation, skip if not needed
+    $ make -C docs html
+    
     # Deactivate the virtual environment
     $ deactivate
     
     # Install to user library
     $ pip3 install dist/PyFFF-0.1.0.tar.gz --user
+
+
+# Documentation
+
+Documentation is available at [pyfff.readthedocs.io](https://pyfff.readthedocs.io/).
 
 
 # Contribution
