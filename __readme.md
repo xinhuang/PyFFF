@@ -73,6 +73,8 @@ please be minded that:
 3.  Please make small commits. The pull request can be large.
 4.  Try to make the code as clean as possible.
 
+**Comments** should be written in NumPy style. See [examples here](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html).
+
 
 # License
 
