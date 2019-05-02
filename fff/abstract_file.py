@@ -45,7 +45,7 @@ class AbstractFile(ABC):
 
     @abstractproperty
     def parent(self) -> 'AbstractFile':
-        """Returns the parent directory of this file."""
+        """AbstractFile: The parent directory of this file."""
         pass
 
     @abstractmethod
@@ -64,5 +64,13 @@ class AbstractFile(ABC):
         Returns
         -------
         Iterable[bytes]
-            The result is a generate of bytes."""
+            The result is a generate of bytes.
+
+        Examples
+        --------
+        Read the 2nd cluster of the file.
+
+        >>> f.read(count=1, skip=1, bsize=fs.cluster_size)
+        b'This is the data contained in the second cluster of this file... [truncated]'
+        """
         pass
