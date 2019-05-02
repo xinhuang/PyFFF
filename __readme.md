@@ -31,10 +31,14 @@
 
 This project is not on PyPI. You need to build from the source code.
 
+Python package [python-magic](https://github.com/ahupp/python-magic) requires additional library to be installed on Windows and macOS.
+For macOS, they can be installed by "`brew install libmagic`". 
+For Windows, please check the python-magic project page.
+
     # git clone
     $ cd PyFFF
     
-    # Create virtual environment
+    # Create a virtual environment
     $ virtualenv -p python3 .
     $ source bin/active
     
@@ -48,6 +52,9 @@ This project is not on PyPI. You need to build from the source code.
     
     # Create installation package
     $ python setup.py sdist
+    
+    # Deactivate the virtual environment
+    $ deactivate
     
     # Install to user library
     $ pip3 install dist/PyFFF-0.1.0.tar.gz --user
