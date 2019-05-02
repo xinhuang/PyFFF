@@ -3,6 +3,10 @@ from typing import Iterable
 
 
 class AbstractFile(ABC):
+    """
+    This is the generic File interface.
+    """
+
     @abstractproperty
     def size(self) -> int:
         """int: The actual size of this file on disk.
@@ -33,12 +37,10 @@ class AbstractFile(ABC):
 
     @abstractproperty
     def fullpath(self) -> str:
-        """str: The full path of this file. 
-
+        """str: The full path of this file. E.g. "/usr/local/bin/python".
 
         Note
         -----
-        For example, "/usr/local/bin/python".
         For root directory, it returns "/".
         """
         pass

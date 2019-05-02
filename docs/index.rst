@@ -9,6 +9,8 @@ Welcome to PyFFF's documentation!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+	     
+   api	     
 
 This is the document of PyFFF: Python For Filesystem Forensics.	  
 

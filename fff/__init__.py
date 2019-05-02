@@ -17,6 +17,9 @@ from typing import Sequence, Optional
 
 
 class MBR(Entity):
+    """
+    The Master Boot Record class.
+    """
 
     SECTOR_SIZE = 512
 
