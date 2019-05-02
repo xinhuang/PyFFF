@@ -9,35 +9,39 @@ class AbstractFile(ABC):
 
     @abstractproperty
     def size(self) -> int:
-        """int: The actual size of this file on disk.
+        """int: The actual size of this file on disk. Abstract property.
         """
         pass
 
     @abstractproperty
     def allocated_size(self) -> int:
-        """int: The allocated size of this file on disk.
+        """int: The allocated size of this file on disk. Abstract property.
         """
         pass
 
     @abstractproperty
     def data(self) -> bytes:
-        """bytes: The data of this file in bytes.
+        """bytes: The data of this file in bytes. Abstract property.
         """
         pass
 
     @abstractproperty
     def mime(self) -> str:
-        """str: The mime type of this file. E.g. "application/x-gzip"."""
+        """str: The mime type of this file. E.g. "application/x-gzip". Abstract property.
+        """
         pass
 
     @abstractproperty
     def name(self) -> str:
-        """str: The name of this file."""
+        """str: The name of this file.
+        Abstract property.
+        """
         pass
 
     @abstractproperty
     def fullpath(self) -> str:
         """str: The full path of this file. E.g. "/usr/local/bin/python".
+        Abstract property.
 
         Note
         -----
@@ -47,12 +51,15 @@ class AbstractFile(ABC):
 
     @abstractproperty
     def parent(self) -> 'AbstractFile':
-        """AbstractFile: The parent directory of this file."""
+        """AbstractFile: The parent directory of this file.
+        Abstract property.
+        """
         pass
 
     @abstractmethod
     def read(self, count: int, skip: int, bsize: int) -> Iterable[bytes]:
         """Read file data at given location.
+        Abstract method.
 
         Parameters
         ----------
