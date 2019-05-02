@@ -38,7 +38,7 @@
   This project is not on PyPI. You need to build from the source code.
 
   Python package [[https://github.com/ahupp/python-magic][python-magic]] requires additional library to be installed on Windows and macOS.
-  For macOS, they can be installed by "=brew install libmagic=". 
+  For macOS, it can be installed by "=brew install libmagic=". 
   For Windows, please check the python-magic project page.
 
   #+BEGIN_SRC sh
