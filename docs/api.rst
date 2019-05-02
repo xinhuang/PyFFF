@@ -5,7 +5,8 @@ The PyFFF API Reference
 
 .. autoclass:: fff.AbstractFile
    :members: 
-   :undoc-members:
 
 .. automodule:: fff.util
    :members:
+      
+.. autofunction:: fff.util.hexdump
