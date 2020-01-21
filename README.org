@@ -5,7 +5,9 @@
 #+OPTIONS: toc:nil
 
 * Usage
-  
+
+  For more examples about using PyFFF in Jupyter Notebook, see the "=notebooks/=" folder.
+
   #+BEGIN_SRC python
   import fff
   from fff.util import *
@@ -37,7 +39,7 @@
   This project is not on PyPI. You need to build from the source code.
 
   Python package [[https://github.com/ahupp/python-magic][python-magic]] requires additional library to be installed on Windows and macOS.
-  For macOS, it can be installed by "=brew install libmagic=". 
+  For macOS, it can be installed by "=brew install libmagic=".
   For Windows, please check the python-magic project page.
 
   #+BEGIN_SRC sh
@@ -55,7 +57,7 @@
   # the test data is not submitted.
   # You can skip this step for now.
   $ nosetests
-  
+
   # Create installation package
   $ python setup.py sdist
 
